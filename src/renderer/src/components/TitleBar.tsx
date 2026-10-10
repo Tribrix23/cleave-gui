@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import logoImg from '../assets/logo.png'
+import CleaveLogo from './CleaveLogo'
 
 interface TitleBarProps {
   title?: string
 }
 
-export default function TitleBar({ title = 'Cleave GUI' }: TitleBarProps): React.JSX.Element {
+export default function TitleBar({ title = 'CleaveDB' }: TitleBarProps): React.JSX.Element {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function TitleBar({ title = 'Cleave GUI' }: TitleBarProps): React
     <header className="custom-titlebar">
       <div className="titlebar-drag-region">
         <div className="titlebar-branding">
-          <img src={logoImg} alt="Cleave icon" className="titlebar-icon" />
+          <CleaveLogo size={16} />
           <span className="titlebar-title">{title}</span>
         </div>
       </div>

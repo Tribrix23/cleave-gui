@@ -1,10 +1,13 @@
 import TitleBar from './components/TitleBar'
+import LoginPage from './components/LoginPage'
 
 function App(): React.JSX.Element {
   return (
     <div className="app-shell">
-      <TitleBar title="Cleave GUI" />
-      <main className="app-main"></main>
+      <TitleBar title="CleaveDB" />
+      <main className="app-main">
+        <LoginPage />
+      </main>
     </div>
   )
 }

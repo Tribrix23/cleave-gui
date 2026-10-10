@@ -16,7 +16,7 @@ function createWindow(): void {
     titleBarStyle: 'hidden',
     titleBarOverlay: false,
     backgroundColor: '#ffffff',
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -54,7 +54,7 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.cleave.gui')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

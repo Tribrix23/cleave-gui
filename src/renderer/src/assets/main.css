@@ -41,7 +41,8 @@ body {
   height: 34px;
   width: 100%;
   background-color: #ffffff;
-  border-bottom: 1px solid #f1f5f9;
+  border: none;
+  border-bottom: none;
   user-select: none;
   z-index: 1000;
   flex-shrink: 0;
@@ -64,8 +65,9 @@ body {
 }
 
 .titlebar-icon {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 
 .titlebar-title {

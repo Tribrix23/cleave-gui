@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import electronLogo from '../assets/electron.svg'
+import logoImg from '../assets/logo.png'
 
 interface TitleBarProps {
   title?: string
@@ -38,7 +38,7 @@ export default function TitleBar({ title = 'Cleave GUI' }: TitleBarProps): React
     <header className="custom-titlebar">
       <div className="titlebar-drag-region">
         <div className="titlebar-branding">
-          <img src={electronLogo} alt="Cleave icon" className="titlebar-icon" />
+          <img src={logoImg} alt="Cleave icon" className="titlebar-icon" />
           <span className="titlebar-title">{title}</span>
         </div>
       </div>

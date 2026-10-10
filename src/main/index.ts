@@ -3,9 +3,13 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+// Set application name early before ready
+app.setName('CleaveDB')
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
+    title: 'CleaveDB',
     width: 1200,
     height: 800,
     minWidth: 800,
@@ -54,7 +58,8 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.cleave.gui')
+  electronApp.setAppUserModelId('CleaveDB')
+  app.setAppUserModelId('CleaveDB')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

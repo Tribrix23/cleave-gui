@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: app
+appId: com.cleavedb.app
+productName: CleaveDB
 directories:
   buildResources: build
 files:
@@ -12,7 +12,7 @@ files:
 asarUnpack:
   - 'resources/**'
 win:
-  executableName: app
+  executableName: CleaveDB
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

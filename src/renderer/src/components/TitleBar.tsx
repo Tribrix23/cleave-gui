@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import CleaveLogo from './CleaveLogo'
+import cleaveLogo from '../assets/cleavedb-logo.png'
 
 interface TitleBarProps {
   title?: string
@@ -38,7 +38,7 @@ export default function TitleBar({ title = 'CleaveDB' }: TitleBarProps): React.J
     <header className="custom-titlebar">
       <div className="titlebar-drag-region">
         <div className="titlebar-branding">
-          <CleaveLogo size={16} />
+          <img src={cleaveLogo} alt="CleaveDB Logo" className="titlebar-icon" />
           <span className="titlebar-title">{title}</span>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import CleaveLogo from './CleaveLogo'
+import cleaveLogo from '../assets/cleavedb-logo.png'
 import cleaveHero from '../assets/cleave-hero.png'
 
 export default function LoginPage(): React.JSX.Element {
@@ -23,7 +23,7 @@ export default function LoginPage(): React.JSX.Element {
         <section className="login-left-section">
           <div className="brand-header">
             <div className="brand-logo-title">
-              <CleaveLogo size={36} />
+              <img src={cleaveLogo} alt="CleaveDB Logo" className="brand-logo-img" />
               <h1 className="brand-title">CleaveDB</h1>
             </div>
             <p className="brand-tagline">A more natural way to work with data.</p>

@@ -6,8 +6,7 @@ body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-image: url('./wavy-lines.svg');
-  background-size: cover;
+  background-color: #ffffff;
   user-select: none;
 }
 
@@ -16,6 +15,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: #ffffff;
 }
 
 .app-shell {
@@ -23,6 +23,7 @@ body {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  background-color: #ffffff;
 }
 
 .app-main {
@@ -33,18 +34,18 @@ body {
   justify-content: center;
   padding-bottom: 40px;
   overflow-y: auto;
+  background-color: #ffffff;
 }
 
-/* Custom TitleBar */
+/* Custom TitleBar - Pure White */
 .custom-titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: 34px;
   width: 100%;
-  background-color: rgba(18, 19, 24, 0.85);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background-color: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
   user-select: none;
   z-index: 1000;
   flex-shrink: 0;
@@ -55,7 +56,7 @@ body {
   height: 100%;
   display: flex;
   align-items: center;
-  padding-left: 12px;
+  padding-left: 14px;
   -webkit-app-region: drag;
 }
 
@@ -67,16 +68,15 @@ body {
 }
 
 .titlebar-icon {
-  width: 14px;
-  height: 14px;
-  opacity: 0.85;
+  width: 15px;
+  height: 15px;
 }
 
 .titlebar-title {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.2px;
-  color: var(--ev-c-text-2);
+  color: #334155;
 }
 
 .titlebar-controls {
@@ -96,18 +96,18 @@ body {
   outline: none;
   padding: 0;
   margin: 0;
-  color: var(--ev-c-text-2);
+  color: #475569;
   transition: background-color 140ms ease, color 140ms ease;
   cursor: default;
 }
 
 .titlebar-btn:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: var(--ev-c-text-1);
+  background-color: #f1f5f9;
+  color: #0f172a;
 }
 
 .titlebar-btn:active {
-  background-color: rgba(255, 255, 255, 0.16);
+  background-color: #e2e8f0;
 }
 
 .titlebar-btn.close-btn:hover {
@@ -120,66 +120,70 @@ body {
   color: #ffffff;
 }
 
+/* Landing Page Elements */
 .logo {
   margin-bottom: 20px;
   -webkit-user-drag: none;
-  height: 128px;
-  width: 128px;
-  will-change: filter;
-  transition: filter 300ms;
+  height: 120px;
+  width: 120px;
+  will-change: filter, transform;
+  transition: filter 300ms, transform 300ms;
 }
 
 .logo:hover {
-  filter: drop-shadow(0 0 1.2em #6988e6aa);
+  filter: drop-shadow(0 10px 25px rgba(2, 132, 199, 0.2));
+  transform: translateY(-2px);
 }
 
 .creator {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 16px;
-  color: var(--ev-c-text-2);
+  color: #64748b;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   margin-bottom: 10px;
 }
 
 .text {
-  font-size: 28px;
-  color: var(--ev-c-text-1);
+  font-size: 30px;
+  color: #0f172a;
   font-weight: 700;
-  line-height: 32px;
+  line-height: 36px;
   text-align: center;
   margin: 0 10px;
-  padding: 16px 0;
+  padding: 8px 0;
 }
 
 .tip {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 24px;
-  color: var(--ev-c-text-2);
-  font-weight: 600;
+  color: #64748b;
+  font-weight: 500;
 }
 
 .react {
-  background: -webkit-linear-gradient(315deg, #087ea4 55%, #7c93ee);
+  background: -webkit-linear-gradient(315deg, #0284c7 40%, #6366f1);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .ts {
-  background: -webkit-linear-gradient(315deg, #3178c6 45%, #f0dc4e);
+  background: -webkit-linear-gradient(315deg, #2563eb 40%, #0284c7);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .actions {
   display: flex;
-  padding-top: 32px;
+  padding-top: 28px;
   margin: -6px;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .action {
@@ -191,47 +195,55 @@ body {
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
-  border: 1px solid transparent;
+  border: 1px solid #e2e8f0;
   text-align: center;
   font-weight: 600;
   white-space: nowrap;
-  border-radius: 20px;
-  padding: 0 20px;
-  line-height: 38px;
+  border-radius: 9999px;
+  padding: 0 24px;
+  line-height: 40px;
   font-size: 14px;
-  border-color: var(--ev-button-alt-border);
-  color: var(--ev-button-alt-text);
-  background-color: var(--ev-button-alt-bg);
+  color: #0f172a;
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  transition: all 150ms ease;
 }
 
 .action a:hover {
-  border-color: var(--ev-button-alt-hover-border);
-  color: var(--ev-button-alt-hover-text);
-  background-color: var(--ev-button-alt-hover-bg);
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
+  transform: translateY(-1px);
+}
+
+.action a:active {
+  transform: translateY(0);
 }
 
 .versions {
   position: absolute;
   bottom: 30px;
   margin: 0 auto;
-  padding: 15px 0;
-  font-family: 'Menlo', 'Lucida Console', monospace;
+  padding: 12px 0;
+  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
   display: inline-flex;
   overflow: hidden;
   align-items: center;
-  border-radius: 22px;
-  background-color: #202127;
-  backdrop-filter: blur(24px);
+  border-radius: 9999px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
 }
 
 .versions li {
   display: block;
   float: left;
-  border-right: 1px solid var(--ev-c-gray-1);
-  padding: 0 20px;
-  font-size: 14px;
+  border-right: 1px solid #e2e8f0;
+  padding: 0 18px;
+  font-size: 13px;
   line-height: 14px;
-  opacity: 0.8;
+  color: #475569;
+  font-weight: 500;
   &:last-child {
     border: none;
   }
@@ -239,7 +251,7 @@ body {
 
 @media (max-width: 720px) {
   .text {
-    font-size: 20px;
+    font-size: 22px;
   }
 }
 

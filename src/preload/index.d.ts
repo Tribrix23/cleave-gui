@@ -1,8 +1,16 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 
+export interface WindowControlAPI {
+  minimizeWindow: () => void
+  maximizeWindow: () => void
+  closeWindow: () => void
+  isMaximized: () => Promise<boolean>
+  onMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI
-    api: unknown
+    api: WindowControlAPI
   }
 }

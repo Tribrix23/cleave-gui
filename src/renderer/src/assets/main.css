@@ -65,6 +65,27 @@ body {
   background-color: #e5e3df;
 }
 
+.custom-titlebar .titlebar-btn.close-btn:hover,
+.custom-titlebar.titlebar-dashboard .titlebar-btn.close-btn:hover,
+.titlebar-btn.close-btn:hover {
+  background-color: #e81123 !important;
+  color: #ffffff !important;
+}
+
+.custom-titlebar .titlebar-btn.close-btn:hover svg line,
+.custom-titlebar .titlebar-btn.close-btn:hover svg path,
+.titlebar-btn.close-btn:hover svg line,
+.titlebar-btn.close-btn:hover svg path {
+  stroke: #ffffff !important;
+}
+
+.custom-titlebar .titlebar-btn.close-btn:active,
+.custom-titlebar.titlebar-dashboard .titlebar-btn.close-btn:active,
+.titlebar-btn.close-btn:active {
+  background-color: #c42b1c !important;
+  color: #ffffff !important;
+}
+
 .titlebar-drag-region {
   flex: 1;
   height: 100%;
@@ -1991,126 +2012,616 @@ body {
   border-radius: 20px;
 }
 
-/* CleaveQL Console */
-.cleaveql-workspace-card {
+/* CleaveQL Console Workspace matching exact reference design */
+.tab-cleaveql-view {
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  height: 100%;
+  background-color: #ffffff;
+}
+
+/* Top 2 Cards Grid */
+.cql-top-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.cql-card {
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  padding: 20px 22px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.cql-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.cql-title-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: #0f172a;
+}
+
+.cql-badge-icon {
+  font-family: 'Consolas', 'Fira Code', monospace;
+  font-size: 19px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+  padding-top: 1px;
+}
+
+.cql-title-texts {
   display: flex;
   flex-direction: column;
 }
 
-.console-engine-pill {
+.cql-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 2px 0;
+  letter-spacing: -0.2px;
+}
+
+.cql-card-subtitle {
+  font-size: 12.5px;
+  color: #64748b;
+  margin: 0;
+}
+
+.cql-examples-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #475569;
   background-color: #ffffff;
-  border: 1px solid #ded9cf;
-  padding: 5px 12px;
-  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  transition: all 140ms ease;
 }
 
-.cleaveql-editor-header {
+.cql-examples-btn:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* Editor Frame */
+.cql-editor-frame {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background-color: #ffffff;
+  padding: 16px 18px;
+  display: flex;
+  gap: 16px;
+  font-family: 'Consolas', 'Fira Code', 'Courier New', monospace;
+  font-size: 13.5px;
+  line-height: 1.65;
+  min-height: 200px;
+  flex: 1;
+  margin-bottom: 16px;
+}
+
+.cql-gutter {
+  display: flex;
+  flex-direction: column;
+  color: #94a3b8;
+  user-select: none;
+  text-align: right;
+  width: 14px;
+  padding-right: 12px;
+  border-right: 1px solid #f1f5f9;
+  font-weight: 500;
+}
+
+.cql-line-number {
+  line-height: 1.65;
+}
+
+.cql-code-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  color: #1e293b;
+}
+
+.cql-code-line {
+  line-height: 1.65;
+  white-space: pre;
+}
+
+.cql-indent {
+  padding-left: 18px;
+}
+
+/* Syntax Highlighting */
+.cql-kw {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.cql-str {
+  color: #0284c7;
+}
+
+.cql-prop {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.cql-num {
+  color: #d97706;
+  font-weight: 600;
+}
+
+/* Editor Toolbar */
+.cql-editor-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 8px 16px;
 }
 
-.query-tab-active {
+.cql-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cql-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #0f172a;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.cql-run-btn:hover {
+  background-color: #1e293b;
+}
+
+.cql-shortcut-badge {
+  background-color: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.cql-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.cql-tool-btn:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.cql-toolbar-right {
+  display: flex;
+  align-items: center;
+}
+
+.cql-format-dropdown {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
-  border-bottom-color: #ffffff;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.cql-format-dropdown:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* Result Card */
+.cql-success-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #059669;
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+
+.cql-dot-green {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #10b981;
+}
+
+.cql-segmented-tabs {
+  background-color: #f1f5f9;
+  border-radius: 8px;
+  padding: 3px;
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  align-self: flex-start;
+}
+
+.cql-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
   padding: 6px 14px;
-  border-radius: 6px 6px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.cql-tab-pill.active {
+  background-color: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.cql-tab-bracket {
+  font-family: 'Consolas', monospace;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.cql-tab-info-icon {
   font-size: 13px;
   font-weight: 600;
-  color: #0284c7;
-  font-family: 'Consolas', 'Fira Code', monospace;
 }
 
-.query-tab-prompt {
-  font-weight: 800;
-  color: #0284c7;
-}
-
-.query-stats-pill {
-  font-size: 11.5px;
-  color: #64748b;
-  font-family: 'Consolas', 'Fira Code', monospace;
-}
-
-.cleaveql-editor-body {
-  display: flex;
-  background-color: #0f172a;
-  color: #f8fafc;
-  font-family: 'Consolas', 'Fira Code', monospace;
-  font-size: 13.5px;
-  line-height: 1.6;
-  padding: 16px 0;
-  min-height: 180px;
-}
-
-.code-line-numbers {
+.cql-result-body {
   display: flex;
   flex-direction: column;
-  padding: 0 16px;
-  color: #475569;
-  user-select: none;
-  text-align: right;
-  border-right: 1px solid #1e293b;
-}
-
-.code-content-mock {
-  padding: 0 18px;
   flex: 1;
 }
 
-.cql-keyword {
-  color: #38bdf8;
-  font-weight: 600;
+.cql-result-id-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
-.cql-table {
-  color: #a78bfa;
-}
-
-.cql-num {
-  color: #f59e0b;
-}
-
-.cleaveql-results-placeholder {
+.cql-doc-id-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background-color: #f8fafc;
-  border-top: 1px solid #e2e8f0;
-  padding: 36px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: 'Consolas', monospace;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #334155;
+  position: relative;
+}
+
+.cql-copy-btn {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.cql-copy-btn:hover {
+  color: #0f172a;
+}
+
+.cql-copied-toast {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #0f172a;
+  color: #ffffff;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.cql-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cql-icon-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.cql-icon-action-btn:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+/* Fields Table */
+.cql-fields-table {
   display: flex;
   flex-direction: column;
+}
+
+.cql-field-row {
+  display: grid;
+  grid-template-columns: 28px 130px 1fr;
   align-items: center;
-  text-align: center;
+  padding: 12px 6px;
+  border-bottom: 1px solid #f8fafc;
+  font-size: 13.5px;
+}
+
+.cql-field-row:last-child {
+  border-bottom: none;
+}
+
+.cql-type-icon {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.cql-field-name-wrap {
+  display: flex;
+  align-items: baseline;
   gap: 8px;
 }
 
-.cleaveql-results-placeholder p {
-  font-size: 13.5px;
-  color: #475569;
-  margin: 0;
-  font-weight: 500;
+.cql-field-name {
+  font-weight: 600;
+  color: #1e293b;
 }
 
-.results-meta {
+.cql-field-type {
+  font-weight: 400;
   font-size: 12px;
   color: #94a3b8;
 }
+
+.cql-field-value {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.cql-raw-json-view,
+.cql-metadata-view {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: 'Consolas', monospace;
+  font-size: 13px;
+  color: #334155;
+  flex: 1;
+}
+
+.cql-raw-json-view pre {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.cql-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.cql-meta-row:last-child {
+  border-bottom: none;
+}
+
+.cql-meta-label {
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.cql-meta-val {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* Query History Card */
+.cql-history-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 22px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+.cql-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cql-history-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0f172a;
+}
+
+.cql-history-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.cql-history-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin-left: 8px;
+}
+
+.cql-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.cql-clear-btn:hover {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.cql-history-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.cql-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px;
+  border-radius: 8px;
+  transition: background-color 120ms ease;
+  border-bottom: 1px solid #f8fafc;
+  cursor: pointer;
+}
+
+.cql-history-item:hover {
+  background-color: #f8fafc;
+}
+
+.cql-history-item:last-child {
+  border-bottom: none;
+}
+
+.cql-history-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.cql-play-icon {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.cql-history-code {
+  font-family: 'Consolas', 'Fira Code', monospace;
+  font-size: 13px;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cql-history-item-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.cql-history-badge-success {
+  background-color: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.cql-history-duration {
+  font-size: 12px;
+  color: #64748b;
+  font-family: 'Consolas', monospace;
+  min-width: 40px;
+  text-align: right;
+}
+
 
 /* Settings Workspace */
 .settings-grid {

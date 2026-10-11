@@ -168,6 +168,89 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null)
   const chartContainerRef = useRef<HTMLDivElement>(null)
 
+  // CleaveQL State
+  const [cqlQuery, setCqlQuery] = useState(`POUR INTO users "jane" {
+  "name": "Jane",
+  "age": 25,
+  "city": "Manila"
+}`)
+  const [cqlResultTab, setCqlResultTab] = useState<'document' | 'raw' | 'metadata'>('document')
+  const [cqlExecutionTime, setCqlExecutionTime] = useState('12 ms')
+  const [cqlCopied, setCqlCopied] = useState(false)
+  const [cqlHistory, setCqlHistory] = useState<Array<{ id: string; query: string; status: 'Success'; duration: string }>>([
+    {
+      id: 'h-1',
+      query: 'POUR INTO users "jane" { "name": "Jane", "age": 25, "city": "Manila" }',
+      status: 'Success',
+      duration: '12 ms'
+    },
+    {
+      id: 'h-2',
+      query: 'SCOOP users',
+      status: 'Success',
+      duration: '8 ms'
+    },
+    {
+      id: 'h-3',
+      query: 'SHOW BUCKETS',
+      status: 'Success',
+      duration: '3 ms'
+    },
+    {
+      id: 'h-4',
+      query: 'DESCRIBE users',
+      status: 'Success',
+      duration: '4 ms'
+    }
+  ])
+
+  const handleRunCql = (): void => {
+    const lat = Math.floor(Math.random() * 8 + 8) + ' ms'
+    setCqlExecutionTime(lat)
+    const normalized = cqlQuery.trim().replace(/\s+/g, ' ')
+    const newHistItem = {
+      id: 'h-' + Date.now(),
+      query: normalized,
+      status: 'Success' as const,
+      duration: lat
+    }
+    setCqlHistory((prev) => [newHistItem, ...prev.filter((item) => item.query !== normalized)].slice(0, 8))
+  }
+
+  const handleCopyId = (text: string): void => {
+    navigator.clipboard?.writeText(text)
+    setCqlCopied(true)
+    setTimeout(() => setCqlCopied(false), 1500)
+  }
+
+  const handleSelectHistoryItem = (queryText: string): void => {
+    if (queryText.includes('{')) {
+      setCqlQuery(`POUR INTO users "jane" {
+  "name": "Jane",
+  "age": 25,
+  "city": "Manila"
+}`)
+    } else {
+      setCqlQuery(queryText)
+    }
+  }
+
+  const handleNextExample = (): void => {
+    const examples = [
+      `POUR INTO users "jane" {
+  "name": "Jane",
+  "age": 25,
+  "city": "Manila"
+}`,
+      `SCOOP users`,
+      `SHOW BUCKETS`,
+      `DESCRIBE users`
+    ]
+    const idx = examples.indexOf(cqlQuery)
+    const nextIdx = (idx + 1) % examples.length
+    setCqlQuery(examples[nextIdx >= 0 ? nextIdx : 0])
+  }
+
   // Fetch real computer disk storage
   useEffect(() => {
     async function loadStorage(): Promise<void> {
@@ -861,64 +944,373 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
         </div>
       )}
 
-      {/* TAB 3: CLEAVEQL (Interactive console workspace) */}
+      {/* TAB 3: CLEAVEQL (Interactive console workspace matching exact design) */}
       {activeTab === 'cleaveql' && (
         <div className="tab-view-container tab-cleaveql-view">
-          <div className="view-header">
-            <div className="view-header-left">
-              <h1 className="view-title">CleaveQL Console</h1>
-              <p className="view-subtitle">Execute real-time declarative queries directly against local PC storage engines.</p>
-            </div>
-            <div className="view-header-actions">
-              <div className="console-engine-pill">
-                <span className="status-dot-green" />
-                <span>Raft Leader: clv-node-01:9092</span>
+          {/* Top 2 Cards Grid */}
+          <div className="cql-top-grid">
+            {/* Left Card: Editor */}
+            <div className="cql-card cql-editor-card">
+              <div className="cql-card-header">
+                <div className="cql-title-group">
+                  <span className="cql-badge-icon">&#123;&#125;</span>
+                  <div className="cql-title-texts">
+                    <h2 className="cql-card-title">CleaveQL</h2>
+                    <p className="cql-card-subtitle">Query your documents, relationships, and more.</p>
+                  </div>
+                </div>
+                <button className="cql-examples-btn" type="button" onClick={handleNextExample}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  </svg>
+                  <span>Examples</span>
+                </button>
               </div>
-              <button className="btn-primary" type="button">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                <span>Run Query</span>
-              </button>
+
+              {/* Editor Frame */}
+              <div className="cql-editor-frame">
+                <div className="cql-gutter">
+                  {cqlQuery.split('\n').map((_, idx) => (
+                    <span key={idx} className="cql-line-number">{idx + 1}</span>
+                  ))}
+                </div>
+                <div className="cql-code-body">
+                  {cqlQuery.split('\n').map((line, idx) => {
+                    if (line.includes('POUR INTO')) {
+                      return (
+                        <div key={idx} className="cql-code-line">
+                          <span className="cql-kw">POUR INTO</span> users <span className="cql-str">&quot;jane&quot;</span> &#123;
+                        </div>
+                      )
+                    }
+                    if (line.includes('"name"')) {
+                      return (
+                        <div key={idx} className="cql-code-line cql-indent">
+                          <span className="cql-prop">&quot;name&quot;</span>: <span className="cql-str">&quot;Jane&quot;</span>,
+                        </div>
+                      )
+                    }
+                    if (line.includes('"age"')) {
+                      return (
+                        <div key={idx} className="cql-code-line cql-indent">
+                          <span className="cql-prop">&quot;age&quot;</span>: <span className="cql-num">25</span>,
+                        </div>
+                      )
+                    }
+                    if (line.includes('"city"')) {
+                      return (
+                        <div key={idx} className="cql-code-line cql-indent">
+                          <span className="cql-prop">&quot;city&quot;</span>: <span className="cql-str">&quot;Manila&quot;</span>
+                        </div>
+                      )
+                    }
+                    if (line.trim() === '}') {
+                      return (
+                        <div key={idx} className="cql-code-line">&#125;</div>
+                      )
+                    }
+                    if (line.startsWith('SCOOP')) {
+                      return (
+                        <div key={idx} className="cql-code-line">
+                          <span className="cql-kw">SCOOP</span> users
+                        </div>
+                      )
+                    }
+                    if (line.startsWith('SHOW BUCKETS')) {
+                      return (
+                        <div key={idx} className="cql-code-line">
+                          <span className="cql-kw">SHOW BUCKETS</span>
+                        </div>
+                      )
+                    }
+                    if (line.startsWith('DESCRIBE')) {
+                      return (
+                        <div key={idx} className="cql-code-line">
+                          <span className="cql-kw">DESCRIBE</span> users
+                        </div>
+                      )
+                    }
+                    return (
+                      <div key={idx} className="cql-code-line">{line}</div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Editor Toolbar */}
+              <div className="cql-editor-toolbar">
+                <div className="cql-toolbar-left">
+                  <button className="cql-run-btn" type="button" onClick={handleRunCql}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    <span>Run</span>
+                    <span className="cql-shortcut-badge">Ctrl ↵</span>
+                  </button>
+                  <button className="cql-tool-btn" type="button" title="Execution Settings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="4" y1="21" x2="4" y2="14" />
+                      <line x1="4" y1="10" x2="4" y2="3" />
+                      <line x1="12" y1="21" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12" y2="3" />
+                      <line x1="20" y1="21" x2="20" y2="16" />
+                      <line x1="20" y1="12" x2="20" y2="3" />
+                      <line x1="1" y1="14" x2="7" y2="14" />
+                      <line x1="9" y1="8" x2="15" y2="8" />
+                      <line x1="17" y1="16" x2="23" y2="16" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="cql-toolbar-right">
+                  <button className="cql-format-dropdown" type="button">
+                    <span>Format: Visual</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Card: Result */}
+            <div className="cql-card cql-result-card">
+              <div className="cql-card-header">
+                <div className="cql-title-group">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                  <h2 className="cql-card-title">Result</h2>
+                </div>
+                <div className="cql-success-pill">
+                  <span className="cql-dot-green" />
+                  <span>Success · {cqlExecutionTime}</span>
+                </div>
+              </div>
+
+              {/* Segmented Tabs */}
+              <div className="cql-segmented-tabs">
+                <button
+                  type="button"
+                  className={`cql-tab-pill ${cqlResultTab === 'document' ? 'active' : ''}`}
+                  onClick={() => setCqlResultTab('document')}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  <span>Document</span>
+                </button>
+                <button
+                  type="button"
+                  className={`cql-tab-pill ${cqlResultTab === 'raw' ? 'active' : ''}`}
+                  onClick={() => setCqlResultTab('raw')}
+                >
+                  <span className="cql-tab-bracket">&#123;&#125;</span>
+                  <span>Raw JSON</span>
+                </button>
+                <button
+                  type="button"
+                  className={`cql-tab-pill ${cqlResultTab === 'metadata' ? 'active' : ''}`}
+                  onClick={() => setCqlResultTab('metadata')}
+                >
+                  <span className="cql-tab-info-icon">&#9432;</span>
+                  <span>Metadata</span>
+                </button>
+              </div>
+
+              {/* Tab Content: Document */}
+              {cqlResultTab === 'document' && (
+                <div className="cql-result-body">
+                  <div className="cql-result-id-bar">
+                    <div className="cql-doc-id-chip">
+                      <span>users:jane</span>
+                      <button
+                        type="button"
+                        className="cql-copy-btn"
+                        onClick={() => handleCopyId('users:jane')}
+                        title="Copy document key"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
+                      </button>
+                      {cqlCopied && <span className="cql-copied-toast">Copied!</span>}
+                    </div>
+                    <div className="cql-result-actions">
+                      <button type="button" className="cql-icon-action-btn" title="Edit document">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                        </svg>
+                      </button>
+                      <button type="button" className="cql-icon-action-btn" title="More options">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="1.5" />
+                          <circle cx="19" cy="12" r="1.5" />
+                          <circle cx="5" cy="12" r="1.5" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="cql-fields-table">
+                    <div className="cql-field-row">
+                      <div className="cql-type-icon">T</div>
+                      <div className="cql-field-name-wrap">
+                        <span className="cql-field-name">name</span>
+                        <span className="cql-field-type">string</span>
+                      </div>
+                      <div className="cql-field-value">Jane</div>
+                    </div>
+
+                    <div className="cql-field-row">
+                      <div className="cql-type-icon">#</div>
+                      <div className="cql-field-name-wrap">
+                        <span className="cql-field-name">age</span>
+                        <span className="cql-field-type">number</span>
+                      </div>
+                      <div className="cql-field-value">25</div>
+                    </div>
+
+                    <div className="cql-field-row">
+                      <div className="cql-type-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                      </div>
+                      <div className="cql-field-name-wrap">
+                        <span className="cql-field-name">city</span>
+                        <span className="cql-field-type">string</span>
+                      </div>
+                      <div className="cql-field-value">Manila</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Content: Raw JSON */}
+              {cqlResultTab === 'raw' && (
+                <div className="cql-raw-json-view">
+                  <pre>{`{
+  "id": "users:jane",
+  "document": {
+    "name": "Jane",
+    "age": 25,
+    "city": "Manila"
+  },
+  "_partition": "partition_primary_01",
+  "_status": "committed",
+  "_timestamp": "2026-10-11T02:30:12.482Z"
+}`}</pre>
+                </div>
+              )}
+
+              {/* Tab Content: Metadata */}
+              {cqlResultTab === 'metadata' && (
+                <div className="cql-metadata-view">
+                  <div className="cql-meta-row">
+                    <span className="cql-meta-label">Storage Engine</span>
+                    <span className="cql-meta-val">Columnar LSM + In-Memory KeyValue</span>
+                  </div>
+                  <div className="cql-meta-row">
+                    <span className="cql-meta-label">Execution Latency</span>
+                    <span className="cql-meta-val">{cqlExecutionTime}</span>
+                  </div>
+                  <div className="cql-meta-row">
+                    <span className="cql-meta-label">Consensus State</span>
+                    <span className="cql-meta-val">Healthy · Leader clv-node-01</span>
+                  </div>
+                  <div className="cql-meta-row">
+                    <span className="cql-meta-label">Write Journal</span>
+                    <span className="cql-meta-val">Committed to WAL (148 bytes)</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="cleaveql-workspace-card">
-            <div className="cleaveql-editor-header">
-              <div className="query-tab-active">
-                <span className="query-tab-prompt">&gt;_</span>
-                <span>query_console_1.cql</span>
-              </div>
-              <span className="query-stats-pill">Dialect: CleaveQL v4 · Engine IPC Ready</span>
-            </div>
-            <div className="cleaveql-editor-body">
-              <div className="code-line-numbers">
-                <span>1</span>
-                <span>2</span>
-                <span>3</span>
-                <span>4</span>
-                <span>5</span>
-              </div>
-              <div className="code-content-mock">
-                <div className="code-line"><span className="cql-keyword">SELECT</span> event_id, timestamp, latency_ms, status_code</div>
-                <div className="code-line"><span className="cql-keyword">FROM</span> <span className="cql-table">analytics_events_prod</span></div>
-                <div className="code-line"><span className="cql-keyword">WHERE</span> latency_ms &lt; <span className="cql-num">1.0</span> <span className="cql-keyword">AND</span> status_code = <span className="cql-num">200</span></div>
-                <div className="code-line"><span className="cql-keyword">ORDER BY</span> timestamp <span className="cql-keyword">DESC</span></div>
-                <div className="code-line"><span className="cql-keyword">LIMIT</span> <span className="cql-num">50</span>;</div>
-              </div>
-            </div>
-            <div className="cleaveql-results-placeholder">
-              <div className="results-empty-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+          {/* Bottom Card: Query History */}
+          <div className="cql-history-card">
+            <div className="cql-history-header">
+              <div className="cql-history-title-wrap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
                 </svg>
+                <h3 className="cql-history-title">Query History</h3>
+                <span className="cql-history-subtitle">Recent queries in this session.</span>
               </div>
-              <p>Ready to execute against the active memory partition.</p>
-              <span className="results-meta">Sub-millisecond query pipeline · Commit Index: 1,420,580</span>
+              <button className="cql-clear-btn" type="button" onClick={() => setCqlHistory([])}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span>Clear</span>
+              </button>
+            </div>
+
+            <div className="cql-history-list">
+              {cqlHistory.map((item) => (
+                <div
+                  key={item.id}
+                  className="cql-history-item"
+                  onClick={() => handleSelectHistoryItem(item.query)}
+                  title="Click to load into editor"
+                >
+                  <div className="cql-history-item-left">
+                    <svg className="cql-play-icon" width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    {item.query.startsWith('POUR INTO') ? (
+                      <span className="cql-history-code">
+                        <span className="cql-kw">POUR INTO</span> users <span className="cql-str">&quot;jane&quot;</span> &#123; <span className="cql-prop">&quot;name&quot;</span>: <span className="cql-str">&quot;Jane&quot;</span>, <span className="cql-prop">&quot;age&quot;</span>: <span className="cql-num">25</span>, <span className="cql-prop">&quot;city&quot;</span>: <span className="cql-str">&quot;Manila&quot;</span> &#125;
+                      </span>
+                    ) : item.query.startsWith('SCOOP') ? (
+                      <span className="cql-history-code">
+                        <span className="cql-kw">SCOOP</span> users
+                      </span>
+                    ) : item.query.startsWith('SHOW BUCKETS') ? (
+                      <span className="cql-history-code">
+                        <span className="cql-kw">SHOW BUCKETS</span>
+                      </span>
+                    ) : item.query.startsWith('DESCRIBE') ? (
+                      <span className="cql-history-code">
+                        <span className="cql-kw">DESCRIBE</span> users
+                      </span>
+                    ) : (
+                      <span className="cql-history-code">{item.query}</span>
+                    )}
+                  </div>
+                  <div className="cql-history-item-right">
+                    <span className="cql-history-badge-success">{item.status}</span>
+                    <span className="cql-history-duration">{item.duration}</span>
+                    <button
+                      className="cql-icon-action-btn"
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Query options"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="1.5" />
+                        <circle cx="19" cy="12" r="1.5" />
+                        <circle cx="5" cy="12" r="1.5" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
+
 
       {/* TAB 4: SETTINGS (Accessed by clicking user card at bottom left) */}
       {activeTab === 'settings' && (

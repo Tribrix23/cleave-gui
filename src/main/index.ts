@@ -7,8 +7,8 @@ import icon from '../../resources/icon.png?asset'
 // Set application name early before ready
 app.setName('CleaveDB')
 
-const RESTORED_WIDTH = 1000
-const RESTORED_HEIGHT = 650
+const RESTORED_WIDTH = 1250
+const RESTORED_HEIGHT = 820
 
 function createWindow(): void {
   // Create the browser window.

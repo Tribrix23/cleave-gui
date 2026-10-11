@@ -167,11 +167,11 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
     chartPoints.reduce((acc, p) => acc + p.requests, 0) / chartPoints.length
   )
 
-  // SVG Chart Dimensions
-  const svgWidth = 850
+  // SVG Chart Dimensions for split layout
+  const svgWidth = 560
   const svgHeight = 220
-  const paddingX = 40
-  const paddingY = 30
+  const paddingX = 35
+  const paddingY = 25
   const graphWidth = svgWidth - paddingX * 2
   const graphHeight = svgHeight - paddingY * 2
 
@@ -331,7 +331,7 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
           <div className="header-status-group">
             <span className="cluster-indicator-dot" />
             <span className="cluster-header-title">Primary Cluster Active</span>
-            <span className="cluster-region-pill">3 Nodes Online · US-East</span>
+            <span className="cluster-region-pill">3 Nodes Online · Local PC</span>
           </div>
 
           <div className="header-actions">
@@ -448,215 +448,214 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
             </div>
           </section>
 
-          {/* Real-time Line Chart: Requests Hitting The Database with Hover Info */}
-          <section className="dashboard-section chart-section">
-            <div className="chart-section-header">
-              <div className="chart-title-group">
-                <h2 className="section-title">Database Requests Live Stream</h2>
-                <div className="live-stream-badge">
-                  <span className="pulse-dot" />
-                  <span>Real-time (1.5s interval)</span>
+          {/* Side-by-Side Row: Request Live Stream (Left) and Database Catalogs (Right) */}
+          <div className="dashboard-split-row">
+            {/* Real-time Line Chart: Requests Hitting The Database with Hover Info */}
+            <section className="dashboard-section chart-section">
+              <div className="chart-section-header">
+                <div className="chart-title-group">
+                  <h2 className="section-title">Database Requests Live Stream</h2>
+                  <div className="live-stream-badge">
+                    <span className="pulse-dot" />
+                    <span>Real-time (1.5s interval)</span>
+                  </div>
+                </div>
+
+                <div className="chart-stats-summary">
+                  <div className="chart-stat-item">
+                    <span className="chart-stat-label">Current:</span>
+                    <span className="chart-stat-val highlight">{currentRequests.toLocaleString()} req/s</span>
+                  </div>
+                  <div className="chart-stat-item">
+                    <span className="chart-stat-label">Peak:</span>
+                    <span className="chart-stat-val">{peakRequests.toLocaleString()} req/s</span>
+                  </div>
+                  <div className="chart-stat-item">
+                    <span className="chart-stat-label">Avg:</span>
+                    <span className="chart-stat-val">{avgRequests.toLocaleString()} req/s</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="chart-stats-summary">
-                <div className="chart-stat-item">
-                  <span className="chart-stat-label">Current:</span>
-                  <span className="chart-stat-val highlight">{currentRequests.toLocaleString()} req/s</span>
-                </div>
-                <div className="chart-stat-item">
-                  <span className="chart-stat-label">Peak:</span>
-                  <span className="chart-stat-val">{peakRequests.toLocaleString()} req/s</span>
-                </div>
-                <div className="chart-stat-item">
-                  <span className="chart-stat-label">Avg:</span>
-                  <span className="chart-stat-val">{avgRequests.toLocaleString()} req/s</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Interactive SVG Line Chart Container */}
-            <div className="chart-canvas-wrapper" ref={chartContainerRef}>
-              <svg
-                viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-                className="interactive-line-chart"
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleMouseLeave}
-              >
-                <defs>
-                  {/* Gradient under line */}
-                  <linearGradient id="requestAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2563eb" stopOpacity="0.22" />
-                    <stop offset="60%" stopColor="#3b82f6" stopOpacity="0.08" />
-                    <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0" />
-                  </linearGradient>
-
-                  {/* Gradient for the line stroke */}
-                  <linearGradient id="lineStrokeGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#0284c7" />
-                    <stop offset="100%" stopColor="#2563eb" />
-                  </linearGradient>
-                </defs>
-
-                {/* Horizontal Grid Lines */}
-                <line x1={paddingX} y1={paddingY} x2={svgWidth - paddingX} y2={paddingY} stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
-                <line x1={paddingX} y1={paddingY + graphHeight / 2} x2={svgWidth - paddingX} y2={paddingY + graphHeight / 2} stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
-                <line x1={paddingX} y1={svgHeight - paddingY} x2={svgWidth - paddingX} y2={svgHeight - paddingY} stroke="#e2e8f0" strokeWidth="1" />
-
-                {/* Y-axis Labels */}
-                <text x={paddingX - 8} y={paddingY + 4} textAnchor="end" className="chart-axis-text">
-                  {Math.round(maxReq).toLocaleString()}
-                </text>
-                <text x={paddingX - 8} y={paddingY + graphHeight / 2 + 4} textAnchor="end" className="chart-axis-text">
-                  {Math.round((maxReq + minReq) / 2).toLocaleString()}
-                </text>
-                <text x={paddingX - 8} y={svgHeight - paddingY + 4} textAnchor="end" className="chart-axis-text">
-                  {Math.round(minReq).toLocaleString()}
-                </text>
-
-                {/* Area under the line */}
-                <path d={areaPath} fill="url(#requestAreaGrad)" />
-
-                {/* Curved line chart */}
-                <path d={linePath} fill="none" stroke="url(#lineStrokeGrad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-
-                {/* Ambient glow on latest live point */}
-                {coords.length > 0 && (
-                  <circle
-                    cx={coords[coords.length - 1].x}
-                    cy={coords[coords.length - 1].y}
-                    r="4"
-                    fill="#2563eb"
-                    className="live-pulse-dot"
-                  />
-                )}
-
-                {/* Interactive Hover Vertical Guide Line & Indicator Dot */}
-                {hoverPosition && (
-                  <>
-                    <line
-                      x1={hoverPosition.x}
-                      y1={paddingY}
-                      x2={hoverPosition.x}
-                      y2={svgHeight - paddingY}
-                      stroke="#3b82f6"
-                      strokeWidth="1.5"
-                      strokeDasharray="4 3"
-                    />
-                    <circle
-                      cx={hoverPosition.x}
-                      cy={hoverPosition.y}
-                      r="6"
-                      fill="#ffffff"
-                      stroke="#2563eb"
-                      strokeWidth="3"
-                      filter="drop-shadow(0 2px 5px rgba(37,99,235,0.4))"
-                    />
-                  </>
-                )}
-              </svg>
-
-              {/* Floating Tooltip displaying exact requests upon hover */}
-              {hoveredPoint && hoverPosition && (
-                <div
-                  className="chart-hover-tooltip"
-                  style={{
-                    left: `${(hoverPosition.x / svgWidth) * 100}%`,
-                    top: `${(hoverPosition.y / svgHeight) * 100}%`
-                  }}
+              {/* Interactive SVG Line Chart Container */}
+              <div className="chart-canvas-wrapper" ref={chartContainerRef}>
+                <svg
+                  viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                  className="interactive-line-chart"
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={handleMouseLeave}
                 >
-                  <div className="tooltip-header">
-                    <span className="tooltip-time">{hoveredPoint.time}</span>
-                    <span className="tooltip-tag">Live Point</span>
-                  </div>
-                  <div className="tooltip-body">
-                    <div className="tooltip-metric">
-                      <span className="tooltip-label">Requests:</span>
-                      <span className="tooltip-val-req">{hoveredPoint.requests.toLocaleString()} req/s</span>
-                    </div>
-                    <div className="tooltip-metric">
-                      <span className="tooltip-label">Latency:</span>
-                      <span className="tooltip-val-lat">{hoveredPoint.latency} ms</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+                  <defs>
+                    {/* Gradient under line */}
+                    <linearGradient id="requestAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#2563eb" stopOpacity="0.22" />
+                      <stop offset="60%" stopColor="#3b82f6" stopOpacity="0.08" />
+                      <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0" />
+                    </linearGradient>
 
-            <div className="chart-footer-hint">
-              <span>💡 Hover anywhere along the curve to inspect exact real-time requests and response latency.</span>
-            </div>
-          </section>
+                    {/* Gradient for the line stroke */}
+                    <linearGradient id="lineStrokeGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#0284c7" />
+                      <stop offset="100%" stopColor="#2563eb" />
+                    </linearGradient>
+                  </defs>
 
-          {/* Database Catalogs Overview */}
-          <section className="dashboard-section">
-            <div className="section-header">
-              <div className="section-title-group">
-                <h2 className="section-title">Database Catalogs</h2>
-                <span className="section-tag">{filteredDatabases.length} Active Catalogs</span>
-              </div>
-              <div className="search-input-wrapper">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  {/* Horizontal Grid Lines */}
+                  <line x1={paddingX} y1={paddingY} x2={svgWidth - paddingX} y2={paddingY} stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
+                  <line x1={paddingX} y1={paddingY + graphHeight / 2} x2={svgWidth - paddingX} y2={paddingY + graphHeight / 2} stroke="#f1f5f9" strokeWidth="1" strokeDasharray="3 3" />
+                  <line x1={paddingX} y1={svgHeight - paddingY} x2={svgWidth - paddingX} y2={svgHeight - paddingY} stroke="#e2e8f0" strokeWidth="1" />
+
+                  {/* Y-axis Labels */}
+                  <text x={paddingX - 8} y={paddingY + 4} textAnchor="end" className="chart-axis-text">
+                    {Math.round(maxReq).toLocaleString()}
+                  </text>
+                  <text x={paddingX - 8} y={paddingY + graphHeight / 2 + 4} textAnchor="end" className="chart-axis-text">
+                    {Math.round((maxReq + minReq) / 2).toLocaleString()}
+                  </text>
+                  <text x={paddingX - 8} y={svgHeight - paddingY + 4} textAnchor="end" className="chart-axis-text">
+                    {Math.round(minReq).toLocaleString()}
+                  </text>
+
+                  {/* Area under the line */}
+                  <path d={areaPath} fill="url(#requestAreaGrad)" />
+
+                  {/* Curved line chart */}
+                  <path d={linePath} fill="none" stroke="url(#lineStrokeGrad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+                  {/* Ambient glow on latest live point */}
+                  {coords.length > 0 && (
+                    <circle
+                      cx={coords[coords.length - 1].x}
+                      cy={coords[coords.length - 1].y}
+                      r="4"
+                      fill="#2563eb"
+                      className="live-pulse-dot"
+                    />
+                  )}
+
+                  {/* Interactive Hover Vertical Guide Line & Indicator Dot */}
+                  {hoverPosition && (
+                    <>
+                      <line
+                        x1={hoverPosition.x}
+                        y1={paddingY}
+                        x2={hoverPosition.x}
+                        y2={svgHeight - paddingY}
+                        stroke="#3b82f6"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 3"
+                      />
+                      <circle
+                        cx={hoverPosition.x}
+                        cy={hoverPosition.y}
+                        r="6"
+                        fill="#ffffff"
+                        stroke="#2563eb"
+                        strokeWidth="3"
+                        filter="drop-shadow(0 2px 5px rgba(37,99,235,0.4))"
+                      />
+                    </>
+                  )}
                 </svg>
-                <input
-                  type="text"
-                  placeholder="Filter databases..."
-                  className="search-input"
-                  value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                />
-              </div>
-            </div>
 
-            <div className="table-wrapper">
-              <table className="db-table">
-                <thead>
-                  <tr>
-                    <th>Database Name</th>
-                    <th>Storage Engine</th>
-                    <th>Status</th>
-                    <th>Size</th>
-                    <th>Collections</th>
-                    <th>Latency</th>
-                    <th>Last Active</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredDatabases.map((db) => (
-                    <tr key={db.id}>
-                      <td>
-                        <div className="db-name-cell">
-                          <span className="db-disk-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <ellipse cx="12" cy="5" rx="9" ry="3" />
-                              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-                              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-                            </svg>
-                          </span>
-                          <span className="db-name-text">{db.name}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="engine-badge">{db.engine}</span>
-                      </td>
-                      <td>
-                        <span className={`status-badge ${db.status.toLowerCase()}`}>
-                          <span className={`dot-${db.status.toLowerCase()}`} />
-                          {db.status}
-                        </span>
-                      </td>
-                      <td className="cell-muted">{db.size}</td>
-                      <td className="cell-muted">{db.collections}</td>
-                      <td className="cell-muted">{db.latency}</td>
-                      <td className="cell-muted">{db.lastActive}</td>
+                {/* Floating Tooltip displaying exact requests upon hover */}
+                {hoveredPoint && hoverPosition && (
+                  <div
+                    className="chart-hover-tooltip"
+                    style={{
+                      left: `${(hoverPosition.x / svgWidth) * 100}%`,
+                      top: `${(hoverPosition.y / svgHeight) * 100}%`
+                    }}
+                  >
+                    <div className="tooltip-header">
+                      <span className="tooltip-time">{hoveredPoint.time}</span>
+                      <span className="tooltip-tag">Live Point</span>
+                    </div>
+                    <div className="tooltip-body">
+                      <div className="tooltip-metric">
+                        <span className="tooltip-label">Requests:</span>
+                        <span className="tooltip-val-req">{hoveredPoint.requests.toLocaleString()} req/s</span>
+                      </div>
+                      <div className="tooltip-metric">
+                        <span className="tooltip-label">Latency:</span>
+                        <span className="tooltip-val-lat">{hoveredPoint.latency} ms</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="chart-footer-hint">
+                <span>💡 Hover anywhere along the curve to inspect exact real-time requests and response latency.</span>
+              </div>
+            </section>
+
+            {/* Database Catalogs Overview */}
+            <section className="dashboard-section catalogs-section">
+              <div className="section-header">
+                <div className="section-title-group">
+                  <h2 className="section-title">Database Catalogs</h2>
+                  <span className="section-tag">{filteredDatabases.length} Active</span>
+                </div>
+                <div className="search-input-wrapper">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Filter catalogs..."
+                    className="search-input"
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="table-wrapper">
+                <table className="db-table">
+                  <thead>
+                    <tr>
+                      <th>Database Name</th>
+                      <th>Engine</th>
+                      <th>Status</th>
+                      <th>Size</th>
+                      <th>Latency</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                  </thead>
+                  <tbody>
+                    {filteredDatabases.map((db) => (
+                      <tr key={db.id}>
+                        <td>
+                          <div className="db-name-cell">
+                            <span className="db-disk-icon">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <ellipse cx="12" cy="5" rx="9" ry="3" />
+                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                              </svg>
+                            </span>
+                            <span className="db-name-text">{db.name}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="engine-badge">{db.engine}</span>
+                        </td>
+                        <td>
+                          <span className={`status-badge ${db.status.toLowerCase()}`}>
+                            <span className={`dot-${db.status.toLowerCase()}`} />
+                            {db.status}
+                          </span>
+                        </td>
+                        <td className="cell-muted">{db.size}</td>
+                        <td className="cell-muted">{db.latency}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
         </div>
       </main>
     </div>

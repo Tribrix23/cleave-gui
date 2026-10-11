@@ -7,12 +7,15 @@ import icon from '../../resources/icon.png?asset'
 // Set application name early before ready
 app.setName('CleaveDB')
 
+const RESTORED_WIDTH = 1000
+const RESTORED_HEIGHT = 650
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     title: 'CleaveDB',
-    width: 1200,
-    height: 800,
+    width: RESTORED_WIDTH,
+    height: RESTORED_HEIGHT,
     minWidth: 800,
     minHeight: 500,
     center: true,
@@ -37,6 +40,8 @@ function createWindow(): void {
   })
 
   mainWindow.on('unmaximize', () => {
+    mainWindow.setBounds({ width: RESTORED_WIDTH, height: RESTORED_HEIGHT })
+    mainWindow.center()
     mainWindow.webContents.send('window-maximize-change', false)
   })
 
@@ -83,6 +88,8 @@ app.whenReady().then(() => {
     if (win) {
       if (win.isMaximized()) {
         win.unmaximize()
+        win.setBounds({ width: RESTORED_WIDTH, height: RESTORED_HEIGHT })
+        win.center()
       } else {
         win.maximize()
       }
@@ -137,10 +144,14 @@ app.whenReady().then(() => {
   ipcMain.handle('window-restore-smooth', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return false
-    if (!win.isMaximized()) return true
+    if (!win.isMaximized()) {
+      win.setBounds({ width: RESTORED_WIDTH, height: RESTORED_HEIGHT })
+      win.center()
+      return true
+    }
 
     win.unmaximize()
-    win.setBounds({ width: 1200, height: 800 })
+    win.setBounds({ width: RESTORED_WIDTH, height: RESTORED_HEIGHT })
     win.center()
     return true
   })

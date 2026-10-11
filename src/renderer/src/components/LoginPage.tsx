@@ -17,7 +17,7 @@ export default function LoginPage(): React.JSX.Element {
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
 
   // Sign In State
-  const [signinEmail, setSigninEmail] = useState('')
+  const [signinUsername, setSigninUsername] = useState('')
   const [signinPassword, setSigninPassword] = useState('')
   const [showSigninPassword, setShowSigninPassword] = useState(false)
 
@@ -61,7 +61,7 @@ export default function LoginPage(): React.JSX.Element {
 
   const handleSigninSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
-    setFeedbackMessage(`Signed in as ${signinEmail}`)
+    setFeedbackMessage(`Signed in as ${signinUsername}`)
     setTimeout(() => setFeedbackMessage(null), 3000)
   }
 
@@ -76,7 +76,7 @@ export default function LoginPage(): React.JSX.Element {
     setTimeout(() => {
       setFeedbackMessage(null)
       setAuthMode('signin')
-      setSigninEmail(username)
+      setSigninUsername(username)
     }, 2000)
   }
 
@@ -96,7 +96,7 @@ export default function LoginPage(): React.JSX.Element {
     setTimeout(() => {
       setFeedbackMessage(null)
       setAuthMode('signin')
-      setSigninEmail(forgotUsername)
+      setSigninUsername(forgotUsername)
       setForgotNewPassword('')
       setForgotConfirmPassword('')
       setForgotSecurityAnswer('')
@@ -149,25 +149,25 @@ export default function LoginPage(): React.JSX.Element {
                 </div>
 
                 <form className="auth-form" onSubmit={handleSigninSubmit}>
-                  {/* Email Input */}
+                  {/* Username Input */}
                   <div className="form-group">
-                    <label htmlFor="email-input" className="form-label">
-                      Email
+                    <label htmlFor="signin-username" className="form-label">
+                      Username
                     </label>
                     <div className="input-wrapper">
                       <span className="input-icon">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="2" y="4" width="20" height="16" rx="3" />
-                          <path d="M22 7L12 13.5L2 7" />
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
                         </svg>
                       </span>
                       <input
-                        id="email-input"
-                        type="email"
+                        id="signin-username"
+                        type="text"
                         className="form-input"
-                        placeholder="you@exemple.com"
-                        value={signinEmail}
-                        onChange={(e) => setSigninEmail(e.target.value)}
+                        placeholder="Enter your username"
+                        value={signinUsername}
+                        onChange={(e) => setSigninUsername(e.target.value)}
                         required
                       />
                     </div>

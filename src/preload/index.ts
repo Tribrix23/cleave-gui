@@ -21,6 +21,9 @@ const api = {
   restoreWindowSmooth: (): Promise<boolean> => {
     return ipcRenderer.invoke('window-restore-smooth')
   },
+  getSystemStorage: (): Promise<{ totalGB: number; freeGB: number; usedGB: number; percentUsed: number; drive: string }> => {
+    return ipcRenderer.invoke('get-system-storage')
+  },
   onMaximizeChange: (callback: (isMaximized: boolean) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, isMaximized: boolean): void => {
       callback(isMaximized)

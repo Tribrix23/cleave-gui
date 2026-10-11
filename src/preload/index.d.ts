@@ -7,6 +7,7 @@ export interface WindowControlAPI {
   isMaximized: () => Promise<boolean>
   maximizeWindowSmooth: () => Promise<boolean>
   restoreWindowSmooth: () => Promise<boolean>
+  getSystemStorage: () => Promise<{ totalGB: number; freeGB: number; usedGB: number; percentUsed: number; drive: string }>
   onMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void
 }
 

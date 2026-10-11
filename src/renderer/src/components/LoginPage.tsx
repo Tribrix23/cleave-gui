@@ -12,7 +12,11 @@ const SECURITY_QUESTIONS = [
   'Name a favorite open-source software project:'
 ]
 
-export default function LoginPage(): React.JSX.Element {
+interface LoginPageProps {
+  onSignInSuccess?: (username: string) => void
+}
+
+export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JSX.Element {
   // Mode: 'signin' | 'signup' | 'forgot'
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
 
@@ -61,8 +65,11 @@ export default function LoginPage(): React.JSX.Element {
 
   const handleSigninSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
-    setFeedbackMessage(`Signed in as ${signinUsername}`)
-    setTimeout(() => setFeedbackMessage(null), 3000)
+    setFeedbackMessage(`Signing in as ${signinUsername}...`)
+    setTimeout(() => {
+      setFeedbackMessage(null)
+      onSignInSuccess?.(signinUsername)
+    }, 350)
   }
 
   const handleSignupSubmit = (e: React.FormEvent): void => {

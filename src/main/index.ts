@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -96,6 +96,52 @@ app.whenReady().then(() => {
   ipcMain.handle('window-is-maximized', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     return win?.isMaximized() ?? false
+  })
+
+  // Smooth window maximization
+  ipcMain.handle('window-maximize-smooth', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+    if (win.isMaximized()) return true
+
+    const startBounds = win.getBounds()
+    const currentDisplay = screen.getDisplayMatching(startBounds)
+    const targetBounds = currentDisplay.workArea
+
+    const duration = 280
+    const steps = 18
+    const interval = duration / steps
+    const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3)
+
+    for (let i = 1; i <= steps; i++) {
+      if (win.isDestroyed()) break
+      const progress = easeOutCubic(i / steps)
+      const current = {
+        x: Math.round(startBounds.x + (targetBounds.x - startBounds.x) * progress),
+        y: Math.round(startBounds.y + (targetBounds.y - startBounds.y) * progress),
+        width: Math.round(startBounds.width + (targetBounds.width - startBounds.width) * progress),
+        height: Math.round(startBounds.height + (targetBounds.height - startBounds.height) * progress)
+      }
+      win.setBounds(current)
+      await new Promise((r) => setTimeout(r, interval))
+    }
+
+    if (!win.isDestroyed()) {
+      win.maximize()
+    }
+    return true
+  })
+
+  // Smooth window restore when signing out
+  ipcMain.handle('window-restore-smooth', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+    if (!win.isMaximized()) return true
+
+    win.unmaximize()
+    win.setBounds({ width: 1200, height: 800 })
+    win.center()
+    return true
   })
 
   createWindow()

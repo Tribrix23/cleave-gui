@@ -5,6 +5,8 @@ export interface WindowControlAPI {
   maximizeWindow: () => void
   closeWindow: () => void
   isMaximized: () => Promise<boolean>
+  maximizeWindowSmooth: () => Promise<boolean>
+  restoreWindowSmooth: () => Promise<boolean>
   onMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void
 }
 

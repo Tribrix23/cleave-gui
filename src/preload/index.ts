@@ -15,6 +15,12 @@ const api = {
   isMaximized: (): Promise<boolean> => {
     return ipcRenderer.invoke('window-is-maximized')
   },
+  maximizeWindowSmooth: (): Promise<boolean> => {
+    return ipcRenderer.invoke('window-maximize-smooth')
+  },
+  restoreWindowSmooth: (): Promise<boolean> => {
+    return ipcRenderer.invoke('window-restore-smooth')
+  },
   onMaximizeChange: (callback: (isMaximized: boolean) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, isMaximized: boolean): void => {
       callback(isMaximized)

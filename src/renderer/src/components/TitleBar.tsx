@@ -3,9 +3,10 @@ import cleaveLogo from '../assets/cleavedb-logo.png'
 
 interface TitleBarProps {
   title?: string
+  isDashboard?: boolean
 }
 
-export default function TitleBar({ title = 'CleaveDB' }: TitleBarProps): React.JSX.Element {
+export default function TitleBar({ title = 'CleaveDB', isDashboard = false }: TitleBarProps): React.JSX.Element {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export default function TitleBar({ title = 'CleaveDB' }: TitleBarProps): React.J
   }
 
   return (
-    <header className="custom-titlebar">
+    <header className={`custom-titlebar ${isDashboard ? 'titlebar-dashboard' : ''}`}>
       <div className="titlebar-drag-region">
         <div className="titlebar-branding">
           <img src={cleaveLogo} alt="CleaveDB Logo" className="titlebar-icon" />

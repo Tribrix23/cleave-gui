@@ -35,7 +35,7 @@ body {
   background-color: #ffffff;
 }
 
-/* Custom TitleBar - Seamless Pure White */
+/* Custom TitleBar - Seamless Pure White (Login) / Isabelline (Dashboard) */
 .custom-titlebar {
   display: flex;
   align-items: center;
@@ -48,6 +48,20 @@ body {
   user-select: none;
   z-index: 1000;
   flex-shrink: 0;
+  transition: background-color 280ms ease, border-color 280ms ease;
+}
+
+.custom-titlebar.titlebar-dashboard {
+  background-color: #EEEBE5;
+}
+
+.custom-titlebar.titlebar-dashboard .titlebar-btn:hover {
+  background-color: #e2ded5;
+  color: #0f172a;
+}
+
+.custom-titlebar.titlebar-dashboard .titlebar-btn:active {
+  background-color: #d8d3c9;
 }
 
 .titlebar-drag-region {
@@ -751,18 +765,19 @@ body {
   }
 }
 
-/* Sidebar */
+/* Sidebar - Isabelline #EEEBE5 */
 .dashboard-sidebar {
   width: 240px;
   min-width: 240px;
   height: 100%;
-  background-color: #ffffff;
-  border-right: 1px solid #f1f5f9;
+  background-color: #EEEBE5;
+  border-right: 1px solid #ded9cf;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: 16px 14px 14px;
   box-sizing: border-box;
+  transition: background-color 280ms ease, border-color 280ms ease;
 }
 
 .sidebar-brand {
@@ -770,7 +785,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 4px 6px 18px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #ded9cf;
 }
 
 .sidebar-logo-group {
@@ -796,8 +811,8 @@ body {
   font-size: 10px;
   font-weight: 600;
   color: #0284c7;
-  background-color: #eff6ff;
-  border: 1px solid #dbeafe;
+  background-color: #ffffff;
+  border: 1px solid #ded9cf;
   padding: 2px 5px;
   border-radius: 4px;
 }
@@ -820,7 +835,7 @@ body {
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: #64748b;
+  color: #475569;
   cursor: pointer;
   transition: all 140ms ease;
   width: 100%;
@@ -828,35 +843,36 @@ body {
 }
 
 .nav-item:hover {
-  background-color: #f8fafc;
+  background-color: rgba(255, 255, 255, 0.65);
   color: #0f172a;
 }
 
 .nav-item.active {
-  background-color: #eff6ff;
+  background-color: #ffffff;
   color: #0284c7;
   font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 .nav-count {
   margin-left: auto;
   font-size: 11px;
   font-weight: 600;
-  background-color: #f1f5f9;
+  background-color: rgba(0, 0, 0, 0.06);
   color: #475569;
   padding: 2px 6px;
   border-radius: 10px;
 }
 
 .nav-item.active .nav-count {
-  background-color: #dbeafe;
+  background-color: #eff6ff;
   color: #0284c7;
 }
 
 /* Sidebar Footer & User Profile */
 .sidebar-footer {
   padding-top: 12px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid #ded9cf;
 }
 
 .user-profile-card {
@@ -864,9 +880,10 @@ body {
   align-items: center;
   gap: 10px;
   padding: 6px 8px;
-  background-color: #f8fafc;
-  border: 1px solid #f1f5f9;
+  background-color: #ffffff;
+  border: 1px solid #ded9cf;
   border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .user-avatar-circle {
@@ -943,15 +960,17 @@ body {
   background-color: #ffffff;
 }
 
-/* Top Header */
+/* Top Header - Isabelline #EEEBE5 */
 .dashboard-top-header {
   height: 52px;
   min-height: 52px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #ded9cf;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
+  background-color: #EEEBE5;
+  transition: background-color 280ms ease, border-color 280ms ease;
 }
 
 .header-status-group {
@@ -979,8 +998,8 @@ body {
   font-size: 11px;
   font-weight: 500;
   color: #475569;
-  background-color: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  border: 1px solid #ded9cf;
   padding: 2px 8px;
   border-radius: 6px;
 }
@@ -998,8 +1017,8 @@ body {
   font-size: 11.5px;
   font-weight: 500;
   color: #475569;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  border: 1px solid #ded9cf;
   padding: 4px 10px;
   border-radius: 20px;
 }

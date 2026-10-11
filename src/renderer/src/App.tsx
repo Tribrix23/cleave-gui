@@ -38,8 +38,8 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <div className="app-shell">
-      <TitleBar title="CleaveDB" />
+    <div className={`app-shell ${currentPage === 'dashboard' ? 'app-shell-dashboard' : ''}`}>
+      <TitleBar title="CleaveDB" isDashboard={currentPage === 'dashboard'} />
       <main className={`app-main ${currentPage === 'dashboard' ? 'app-main-dashboard' : ''}`}>
         {currentPage === 'login' ? (
           <LoginPage onSignInSuccess={handleSignInSuccess} />

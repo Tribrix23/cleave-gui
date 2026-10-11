@@ -53,7 +53,7 @@ body {
 
 .custom-titlebar.titlebar-dashboard {
   background-color: #f9f9f8;
-  border-bottom: 1px solid #eae8e5;
+  border-bottom: none;
 }
 
 .custom-titlebar.titlebar-dashboard .titlebar-btn:hover {
@@ -774,7 +774,7 @@ body {
   min-width: 240px;
   height: 100%;
   background-color: #f9f9f8;
-  border-right: 1px solid #eae8e5;
+  border-right: none;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -987,7 +987,7 @@ body {
   color: #dc2626;
 }
 
-/* Main Content Area */
+/* Main Content Area (Curved Top-Left Corner) */
 .dashboard-main-content {
   flex: 1;
   display: flex;
@@ -995,6 +995,9 @@ body {
   height: 100%;
   overflow: hidden;
   background-color: #ffffff;
+  border-top-left-radius: 14px;
+  border-left: 1px solid #eae8e5;
+  border-top: 1px solid #eae8e5;
 }
 
 /* Top Header across Main Content only (Pure White & Clean Separator) */

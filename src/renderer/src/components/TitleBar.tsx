@@ -38,10 +38,12 @@ export default function TitleBar({ title = 'CleaveDB', isDashboard = false }: Ti
   return (
     <header className={`custom-titlebar ${isDashboard ? 'titlebar-dashboard' : ''}`}>
       <div className="titlebar-drag-region">
-        <div className="titlebar-branding">
-          <img src={cleaveLogo} alt="CleaveDB Logo" className="titlebar-icon" />
-          <span className="titlebar-title">{title}</span>
-        </div>
+        {!isDashboard && (
+          <div className="titlebar-branding">
+            <img src={cleaveLogo} alt="CleaveDB Logo" className="titlebar-icon" />
+            <span className="titlebar-title">{title}</span>
+          </div>
+        )}
       </div>
 
       <div className="titlebar-controls">

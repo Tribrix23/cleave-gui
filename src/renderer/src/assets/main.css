@@ -457,6 +457,183 @@ body {
   transform: scale(0.99);
 }
 
+/* ========================================================
+   Sign Up Specific Styles & Feedback Banners
+   ======================================================== */
+.auth-card-signup {
+  max-width: 430px;
+  padding: 26px 30px;
+  max-height: calc(100vh - 58px);
+  overflow-y: auto;
+}
+
+.auth-card-signup::-webkit-scrollbar {
+  width: 5px;
+}
+
+.auth-card-signup::-webkit-scrollbar-thumb {
+  background-color: #e2e8f0;
+  border-radius: 4px;
+}
+
+.auth-card-signup::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.auth-card-signup .auth-header {
+  margin-bottom: 18px;
+}
+
+.auth-card-signup .auth-title {
+  font-size: 23px;
+}
+
+.auth-card-signup .form-group {
+  margin-bottom: 12px;
+}
+
+.auth-card-signup .form-input {
+  height: 40px;
+}
+
+.auth-card-signup .submit-sign-in-btn,
+.auth-card-signup .create-account-btn {
+  height: 40px;
+}
+
+.auth-card-signup .auth-divider {
+  margin: 12px 0;
+}
+
+/* Feedback Alert Banner */
+.feedback-banner {
+  border-radius: 9px;
+  padding: 9px 13px;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeInDown 200ms ease;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.feedback-banner.success {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.feedback-banner.error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+/* Developer Key Tag */
+.label-with-tag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.label-with-tag .form-label {
+  margin-bottom: 0;
+}
+
+.dev-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+  color: #2563eb;
+  background-color: #eff6ff;
+  border: 1px solid #dbeafe;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+/* Password Mismatch Hint */
+.field-error-hint {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #ef4444;
+  margin: 5px 0 0 2px;
+}
+
+/* Security Challenge Container & Question Banner */
+.security-challenge-group {
+  margin-top: 4px;
+  margin-bottom: 14px !important;
+}
+
+.security-question-banner {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 7px;
+}
+
+.question-banner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.question-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0284c7;
+  letter-spacing: 0.2px;
+}
+
+.refresh-question-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.refresh-question-btn:hover {
+  background-color: #e2e8f0;
+  color: #1e293b;
+}
+
+.question-text {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #1e293b;
+  line-height: 1.35;
+  margin: 0;
+}
+
 @media (max-width: 960px) {
   .login-container {
     flex-direction: column;
@@ -471,3 +648,4 @@ body {
     justify-content: center;
   }
 }
+

@@ -1,7 +1,13 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 
 export interface AuthAPI {
-  login: (credentials: { username: string; password: string }) => Promise<{ success: boolean; username?: string; error?: string }>
+  login: (credentials: { username: string; password: string }) => Promise<{
+    success: boolean
+    username?: string
+    authLevel?: string
+    isSuperUser?: boolean
+    error?: string
+  }>
   register: (data: {
     username: string
     password: string
@@ -16,6 +22,7 @@ export interface AuthAPI {
     newPassword: string
   }) => Promise<{ success: boolean; message?: string; error?: string }>
   checkStatus: () => Promise<{ online: boolean }>
+  getSession: () => Promise<{ username: string; authLevel: string; isSuperUser: boolean }>
 }
 
 export interface WindowControlAPI {
@@ -28,6 +35,8 @@ export interface WindowControlAPI {
   getSystemStorage: () => Promise<{ totalGB: number; freeGB: number; usedGB: number; percentUsed: number; drive: string }>
   onMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void
   auth: AuthAPI
+  getTelemetry: () => Promise<{ success: boolean; metrics?: any; error?: string }>
+  query: (sql: string) => Promise<{ success: boolean; results?: any; error?: string }>
 }
 
 declare global {

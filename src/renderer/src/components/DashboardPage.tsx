@@ -3,7 +3,45 @@ import cleaveLogo from '../assets/cleavedb-logo.png'
 
 interface DashboardPageProps {
   username: string
+  isSuperUser?: boolean
   onSignOut: () => void
+}
+
+interface CleaveTelemetry {
+  status: string
+  timestamp: number
+  requests_per_second: number
+  total_requests: number
+  latency_ms: number
+  p95_latency_ms: number
+  p99_latency_ms: number
+  chart_history: Array<[number, number, number]>
+  storage: {
+    total_gb: number
+    used_gb: number
+    free_gb: number
+    used_percent: number
+  }
+  databases: Array<{
+    name: string
+    full_name: string
+    tenant: string
+    records: number
+    size: string
+    size_bytes: number
+    storage_engine: string
+    schema: Record<string, string>
+    status: string
+  }>
+  cluster: {
+    node_id: string
+    is_leader: boolean
+    leader: string
+    status: string
+    has_quorum: boolean
+    peer_nodes: string[]
+    active_ports: Record<string, number>
+  }
 }
 
 interface SystemStorage {
@@ -148,10 +186,11 @@ function generateInitialPoints(): RequestDataPoint[] {
   return points
 }
 
-export default function DashboardPage({ username, onSignOut }: DashboardPageProps): React.JSX.Element {
+export default function DashboardPage({ username, isSuperUser, onSignOut }: DashboardPageProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<'overview' | 'databases' | 'cleaveql' | 'settings'>('overview')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true)
-  const [databases] = useState<DatabaseItem[]>(INITIAL_DATABASES)
+  const [telemetry, setTelemetry] = useState<CleaveTelemetry | null>(null)
+  const [databases, setDatabases] = useState<DatabaseItem[]>(INITIAL_DATABASES)
   const [searchFilter, setSearchFilter] = useState('')
 
   // Live real computer storage
@@ -178,7 +217,9 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
   const [cqlResultTab, setCqlResultTab] = useState<'document' | 'raw' | 'metadata'>('document')
   const [cqlExecutionTime, setCqlExecutionTime] = useState('12 ms')
   const [cqlCopied, setCqlCopied] = useState(false)
-  const [cqlHistory, setCqlHistory] = useState<Array<{ id: string; query: string; status: 'Success'; duration: string }>>([
+  const [cqlResultData, setCqlResultData] = useState<any>(null)
+  const [cqlStatus, setCqlStatus] = useState<'Success' | 'Error'>('Success')
+  const [cqlHistory, setCqlHistory] = useState<Array<{ id: string; query: string; status: 'Success' | 'Error'; duration: string }>>([
     {
       id: 'h-1',
       query: 'POUR INTO users "jane" { "name": "Jane", "age": 25, "city": "Manila" }',
@@ -205,17 +246,44 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
     }
   ])
 
-  const handleRunCql = (): void => {
-    const lat = Math.floor(Math.random() * 8 + 8) + ' ms'
-    setCqlExecutionTime(lat)
-    const normalized = cqlQuery.trim().replace(/\s+/g, ' ')
-    const newHistItem = {
-      id: 'h-' + Date.now(),
-      query: normalized,
-      status: 'Success' as const,
-      duration: lat
+  // Real CleaveQL Execution via window.api.query
+  const handleRunCql = async (): Promise<void> => {
+    const t0 = performance.now()
+    try {
+      if (window.api?.query) {
+        const res = await window.api.query(cqlQuery)
+        const lat = Math.round(performance.now() - t0) + ' ms'
+        setCqlExecutionTime(lat)
+        if (res.success) {
+          setCqlStatus('Success')
+          setCqlResultData(res.results)
+          const normalized = cqlQuery.trim().replace(/\s+/g, ' ')
+          const newHistItem = {
+            id: 'h-' + Date.now(),
+            query: normalized,
+            status: 'Success' as const,
+            duration: lat
+          }
+          setCqlHistory((prev) => [newHistItem, ...prev.filter((item) => item.query !== normalized)].slice(0, 8))
+        } else {
+          setCqlStatus('Error')
+          setCqlResultData(res.error ? [{ status: 'error', message: res.error }] : res)
+          const normalized = cqlQuery.trim().replace(/\s+/g, ' ')
+          const newHistItem = {
+            id: 'h-' + Date.now(),
+            query: normalized,
+            status: 'Error' as const,
+            duration: lat
+          }
+          setCqlHistory((prev) => [newHistItem, ...prev.filter((item) => item.query !== normalized)].slice(0, 8))
+        }
+      }
+    } catch (err: any) {
+      const lat = Math.round(performance.now() - t0) + ' ms'
+      setCqlExecutionTime(lat)
+      setCqlStatus('Error')
+      setCqlResultData([{ status: 'error', message: err?.message || 'Execution error' }])
     }
-    setCqlHistory((prev) => [newHistItem, ...prev.filter((item) => item.query !== normalized)].slice(0, 8))
   }
 
   const handleCopyId = (text: string): void => {
@@ -252,6 +320,52 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
     setCqlQuery(examples[nextIdx >= 0 ? nextIdx : 0])
   }
 
+  // Fetch real CleaveDB telemetry metrics continuously
+  useEffect(() => {
+    let isMounted = true
+    async function fetchTelemetry(): Promise<void> {
+      try {
+        if (window.api?.getTelemetry) {
+          const res = await window.api.getTelemetry()
+          if (res?.success && res.metrics && isMounted) {
+            setTelemetry(res.metrics)
+            if (res.metrics.databases && res.metrics.databases.length > 0) {
+              const liveDatabases: DatabaseItem[] = res.metrics.databases.map((db, idx) => ({
+                id: `db-${idx}-${db.full_name || db.name}`,
+                name: db.full_name || db.name,
+                engine: db.storage_engine || 'Columnar LSM',
+                status: (db.status as any) || 'Online',
+                size: db.size || '0 B',
+                collections: Object.keys(db.schema || {}).length || 1,
+                latency: res.metrics.latency_ms ? `${res.metrics.latency_ms.toFixed(2)} ms` : '0.42 ms',
+                lastActive: 'Active'
+              }))
+              setDatabases(liveDatabases)
+            }
+            if (res.metrics.chart_history && res.metrics.chart_history.length > 0) {
+              const livePts: RequestDataPoint[] = res.metrics.chart_history.map(([ts, rps, lat], idx) => ({
+                id: idx,
+                time: new Date(ts * 1000).toTimeString().split(' ')[0],
+                requests: rps,
+                latency: parseFloat((lat || 0).toFixed(2))
+              }))
+              setChartPoints(livePts)
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching telemetry from CleaveDB:', err)
+      }
+    }
+
+    fetchTelemetry()
+    const timer = setInterval(fetchTelemetry, 1500)
+    return () => {
+      isMounted = false
+      clearInterval(timer)
+    }
+  }, [])
+
   // Fetch real computer disk storage
   useEffect(() => {
     async function loadStorage(): Promise<void> {
@@ -269,8 +383,9 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
     return () => clearInterval(storageTimer)
   }, [])
 
-  // Real-time live chart updates (pushes new point every 1.5 seconds)
+  // Real-time live chart updates (fallback if no telemetry yet)
   useEffect(() => {
+    if (telemetry?.chart_history && telemetry.chart_history.length > 0) return
     const timer = setInterval(() => {
       setChartPoints((prev) => {
         const last = prev[prev.length - 1]
@@ -293,13 +408,28 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
     }, 1500)
 
     return () => clearInterval(timer)
-  }, [])
+  }, [telemetry?.chart_history])
 
-  const currentRequests = chartPoints[chartPoints.length - 1]?.requests ?? 3450
-  const peakRequests = Math.max(...chartPoints.map((p) => p.requests))
-  const avgRequests = Math.round(
-    chartPoints.reduce((acc, p) => acc + p.requests, 0) / chartPoints.length
-  )
+  const currentRequests = telemetry ? telemetry.requests_per_second : (chartPoints[chartPoints.length - 1]?.requests ?? 0)
+  const peakRequests = Math.max(...chartPoints.map((p) => p.requests), currentRequests)
+  const avgRequests = chartPoints.length > 0
+    ? Math.round(chartPoints.reduce((acc, p) => acc + p.requests, 0) / chartPoints.length)
+    : 0
+
+  const totalRecords = telemetry?.databases?.reduce((acc, d) => acc + (d.records || 0), 0) ?? 0
+  const totalSizeAllocated = telemetry?.storage
+    ? `${telemetry.storage.used_gb.toFixed(1)} GB`
+    : '74.2 GB'
+
+  const effectiveStorage = telemetry?.storage
+    ? {
+        totalGB: Math.round(telemetry.storage.total_gb),
+        usedGB: Math.round(telemetry.storage.used_gb),
+        freeGB: Math.round(telemetry.storage.free_gb * 10) / 10,
+        percentUsed: Math.round(telemetry.storage.used_percent),
+        drive: systemStorage.drive || 'C:'
+      }
+    : systemStorage
 
   // SVG Chart Dimensions for split layout
   const svgWidth = 560
@@ -309,14 +439,16 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
   const graphWidth = svgWidth - paddingX * 2
   const graphHeight = svgHeight - paddingY * 2
 
-  const minReq = Math.min(...chartPoints.map((p) => p.requests)) * 0.92
-  const maxReq = Math.max(...chartPoints.map((p) => p.requests)) * 1.08
+  const rawMin = Math.min(...chartPoints.map((p) => p.requests)) * 0.92
+  const rawMax = Math.max(...chartPoints.map((p) => p.requests)) * 1.08
+  const minReq = Math.max(0, rawMin)
+  const maxReq = Math.max(rawMax, minReq + 10)
+  const rangeReq = maxReq - minReq || 1
 
   // Calculate SVG point coordinates
   const coords = chartPoints.map((point, index) => {
-    const x = paddingX + (index / (chartPoints.length - 1)) * graphWidth
-    const y =
-      svgHeight - paddingY - ((point.requests - minReq) / (maxReq - minReq)) * graphHeight
+    const x = paddingX + (index / Math.max(1, chartPoints.length - 1)) * graphWidth
+    const y = svgHeight - paddingY - ((point.requests - minReq) / rangeReq) * graphHeight
     return { x, y, point }
   })
 
@@ -365,6 +497,58 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
   const filteredDatabases = databases.filter((db) =>
     db.name.toLowerCase().includes(searchFilter.toLowerCase())
   )
+
+  const getDocumentFields = (): Array<{ name: string; type: string; value: any; iconType?: string }> => {
+    if (!cqlResultData) {
+      return [
+        { name: 'name', type: 'string', value: 'Jane', iconType: 'T' },
+        { name: 'age', type: 'number', value: 25, iconType: '#' },
+        { name: 'city', type: 'string', value: 'Manila', iconType: 'T' }
+      ]
+    }
+
+    const first = Array.isArray(cqlResultData) ? cqlResultData[0] : cqlResultData
+    if (first && first.documents && Array.isArray(first.documents) && first.documents.length > 0) {
+      const doc = first.documents[0]
+      const body = doc.body || doc
+      return Object.entries(body)
+        .filter(([k]) => !k.startsWith('_'))
+        .map(([k, v]) => ({
+          name: k,
+          type: typeof v,
+          value: typeof v === 'object' ? JSON.stringify(v) : String(v),
+          iconType: typeof v === 'number' ? '#' : 'T'
+        }))
+    }
+    if (first && first.data && Array.isArray(first.data)) {
+      return first.data.map((item: any, idx: number) => ({
+        name: `bucket_${idx + 1}`,
+        type: 'bucket',
+        value: String(item),
+        iconType: 'T'
+      }))
+    }
+    if (first && typeof first === 'object') {
+      return Object.entries(first)
+        .filter(([k]) => !k.startsWith('_'))
+        .map(([k, v]) => ({
+          name: k,
+          type: typeof v,
+          value: typeof v === 'object' ? JSON.stringify(v) : String(v),
+          iconType: typeof v === 'number' ? '#' : 'T'
+        }))
+    }
+    return [{ name: 'result', type: typeof first, value: String(first), iconType: 'T' }]
+  }
+
+  const getDocKey = (): string => {
+    if (!cqlResultData) return 'users:jane'
+    const first = Array.isArray(cqlResultData) ? cqlResultData[0] : cqlResultData
+    if (first && first.documents && first.documents[0]?.gid) return first.documents[0].gid
+    if (first && first.gid) return first.gid
+    if (first && first.status) return `status:${first.status}`
+    return 'response:ok'
+  }
 
   const userInitial = (username || 'Developer').charAt(0).toUpperCase()
 
@@ -467,7 +651,7 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
               <span className="user-username">{username || 'Developer'}</span>
               <span className="user-status-pill">
                 <span className="status-dot-green" />
-                Connected
+                {isSuperUser ? 'Super User' : 'Connected'}
               </span>
             </div>
             <div className="user-profile-actions">
@@ -513,8 +697,12 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
           <div className="header-status-section">
             <div className="header-status-group">
               <span className="cluster-indicator-dot" />
-              <span className="cluster-header-title">Primary Cluster Active</span>
-              <span className="cluster-region-pill">3 Nodes Online · Local PC</span>
+              <span className="cluster-header-title">
+                {telemetry?.cluster?.is_leader ? 'Primary Leader Active' : 'Cluster Online'}
+              </span>
+              <span className="cluster-region-pill">
+                {telemetry?.cluster?.leader ? `Leader: ${telemetry.cluster.leader}` : '127.0.0.1 (Local PC)'} · {telemetry?.cluster?.has_quorum ? 'Quorum 100%' : 'Syncing'}
+              </span>
             </div>
 
             <div className="header-actions">
@@ -533,7 +721,11 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
               {/* Welcome Greeting */}
               <section className="welcome-banner">
             <div className="welcome-text">
-              <h1 className="welcome-title">Welcome back, {username || 'Developer'} 👋</h1>
+              <h1 className="welcome-title">
+                {isSuperUser
+                  ? `Welcome back, super user ${username || 'Developer'} 👋`
+                  : `Welcome back, ${username || 'Developer'} 👋`}
+              </h1>
               <p className="welcome-subtitle">
                 Real-time operational analytics and cluster telemetry for CleaveDB.
               </p>
@@ -553,7 +745,7 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                 </span>
               </div>
               <div className="metric-value">{currentRequests.toLocaleString()} <span className="metric-unit">req/s</span></div>
-              <span className="metric-footer">1,420,580 Total Hits Today</span>
+              <span className="metric-footer">{(telemetry?.total_requests ?? 1420580).toLocaleString()} Total Hits Today</span>
             </div>
 
             {/* 2. Latency */}
@@ -567,8 +759,8 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                   </svg>
                 </span>
               </div>
-              <div className="metric-value">0.78 <span className="metric-unit">ms</span></div>
-              <span className="metric-footer">p95: 1.25 ms · p99: 2.10 ms</span>
+              <div className="metric-value">{(telemetry?.latency_ms ?? 0.78).toFixed(2)} <span className="metric-unit">ms</span></div>
+              <span className="metric-footer">p95: {(telemetry?.p95_latency_ms ?? 1.25).toFixed(2)} ms · p99: {(telemetry?.p99_latency_ms ?? 2.10).toFixed(2)} ms</span>
             </div>
 
             {/* 3. How Many Databases */}
@@ -583,8 +775,8 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                   </svg>
                 </span>
               </div>
-              <div className="metric-value">{databases.length} <span className="metric-unit">Active</span></div>
-              <span className="metric-footer">16 Collections · 2.4M records</span>
+              <div className="metric-value">{filteredDatabases.length} <span className="metric-unit">Active</span></div>
+              <span className="metric-footer">{totalRecords.toLocaleString()} Records · {totalSizeAllocated} Allocated</span>
             </div>
 
             {/* 4. Clusters */}
@@ -600,14 +792,14 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                   </svg>
                 </span>
               </div>
-              <div className="metric-value">1 <span className="metric-unit">Cluster (3 Nodes)</span></div>
-              <span className="metric-footer">clv-primary-01 · 99.99% Uptime</span>
+              <div className="metric-value">1 <span className="metric-unit">Cluster ({(telemetry?.cluster?.peer_nodes?.length ?? 0) + 1} Node{((telemetry?.cluster?.peer_nodes?.length ?? 0) + 1) > 1 ? 's' : ''})</span></div>
+              <span className="metric-footer">{telemetry?.cluster?.leader ? `Leader: ${telemetry.cluster.leader}` : 'clv-node-01 (Leader)'} · {telemetry?.cluster?.has_quorum ? 'Quorum Healthy' : 'Quorum Sync'}</span>
             </div>
 
             {/* 5. Computer Storage (Based on the storage of the computer) */}
             <div className="metric-card storage-card-featured">
               <div className="metric-header">
-                <span className="metric-label">Computer Storage ({systemStorage.drive})</span>
+                <span className="metric-label">Computer Storage ({effectiveStorage.drive})</span>
                 <span className="metric-icon">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="2" width="20" height="20" rx="3" />
@@ -617,19 +809,19 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                 </span>
               </div>
               <div className="metric-value">
-                {systemStorage.usedGB} <span className="metric-unit">GB / {systemStorage.totalGB} GB</span>
+                {effectiveStorage.usedGB} <span className="metric-unit">GB / {effectiveStorage.totalGB} GB</span>
               </div>
               <div className="metric-bar-container">
                 <div
                   className="metric-bar-fill"
                   style={{
-                    width: `${systemStorage.percentUsed}%`,
-                    backgroundColor: systemStorage.percentUsed > 90 ? '#ef4444' : '#0284c7'
+                    width: `${effectiveStorage.percentUsed}%`,
+                    backgroundColor: effectiveStorage.percentUsed > 90 ? '#ef4444' : '#0284c7'
                   }}
                 />
               </div>
               <span className="metric-footer">
-                {systemStorage.freeGB} GB Free · {systemStorage.percentUsed}% Disk Used
+                {effectiveStorage.freeGB} GB Free · {effectiveStorage.percentUsed}% Disk Used
               </span>
             </div>
           </section>
@@ -783,7 +975,9 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                 <div className="nodes-section-header">
                   <div className="nodes-title-group">
                     <h2 className="section-title">Local Cluster Nodes</h2>
-                    <span className="nodes-consensus-badge">Raft Consensus Active</span>
+                    <span className="nodes-consensus-badge">
+                      {telemetry?.cluster?.has_quorum ? 'Raft Consensus Active' : 'Consensus Active'}
+                    </span>
                   </div>
                   <span className="local-host-pill">127.0.0.1 (Local PC)</span>
                 </div>
@@ -793,15 +987,17 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                     <div className="node-top">
                       <div className="node-name-wrapper">
                         <span className="node-dot-online" />
-                        <span className="node-name">clv-node-01</span>
+                        <span className="node-name">
+                          {telemetry?.cluster?.leader ? `clv-leader (${telemetry.cluster.leader})` : 'clv-node-01'}
+                        </span>
                       </div>
                       <span className="node-role-badge leader">Primary Leader</span>
                     </div>
                     <div className="node-metrics-row">
-                      <span className="node-stat-pill">Port 9092</span>
-                      <span className="node-stat-pill">CPU 11.4%</span>
-                      <span className="node-stat-pill">RAM 1.4 GB</span>
-                      <span className="node-stat-pill">IOPS 2,840/s</span>
+                      <span className="node-stat-pill">Port {telemetry?.cluster?.active_ports?.raft || 8311} (Raft)</span>
+                      <span className="node-stat-pill">Port {telemetry?.cluster?.active_ports?.gateway || 8300} (Gateway)</span>
+                      <span className="node-stat-pill">Port {telemetry?.cluster?.active_ports?.http_rest || 8303} (REST)</span>
+                      <span className="node-stat-pill">Port {telemetry?.cluster?.active_ports?.websocket || 8302} (WS)</span>
                     </div>
                   </div>
 
@@ -809,15 +1005,15 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                     <div className="node-top">
                       <div className="node-name-wrapper">
                         <span className="node-dot-online" />
-                        <span className="node-name">clv-node-02</span>
+                        <span className="node-name">clv-coordinator-01</span>
                       </div>
-                      <span className="node-role-badge replica">Raft Replica</span>
+                      <span className="node-role-badge replica">Go Shard Coordinator</span>
                     </div>
                     <div className="node-metrics-row">
-                      <span className="node-stat-pill">Port 9093</span>
-                      <span className="node-stat-pill">CPU 7.2%</span>
-                      <span className="node-stat-pill">RAM 980 MB</span>
-                      <span className="node-stat-pill">IOPS 1,420/s</span>
+                      <span className="node-stat-pill">Port {telemetry?.cluster?.active_ports?.coordinator || 8305}</span>
+                      <span className="node-stat-pill">Scatter-Gather</span>
+                      <span className="node-stat-pill">Shard 127.0.0.1:8300</span>
+                      <span className="node-stat-pill">Status: Online</span>
                     </div>
                   </div>
 
@@ -825,15 +1021,15 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                     <div className="node-top">
                       <div className="node-name-wrapper">
                         <span className="node-dot-online" />
-                        <span className="node-name">clv-node-03</span>
+                        <span className="node-name">clv-ipc-bridge</span>
                       </div>
-                      <span className="node-role-badge replica">Raft Replica</span>
+                      <span className="node-role-badge replica">Loopback IPC</span>
                     </div>
                     <div className="node-metrics-row">
-                      <span className="node-stat-pill">Port 9094</span>
-                      <span className="node-stat-pill">CPU 6.8%</span>
-                      <span className="node-stat-pill">RAM 910 MB</span>
-                      <span className="node-stat-pill">IOPS 1,380/s</span>
+                      <span className="node-stat-pill">Port {telemetry?.cluster?.active_ports?.tcp || 8299}</span>
+                      <span className="node-stat-pill">Internal IPC Bridge</span>
+                      <span className="node-stat-pill">Status: Online</span>
+                      <span className="node-stat-pill">0.00% Packet Loss</span>
                     </div>
                   </div>
                 </div>
@@ -841,10 +1037,10 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                 <div className="node-engine-footer">
                   <div className="engine-status-left">
                     <span className="status-dot-green" />
-                    <span>Engine IPC: \\.\pipe\cleavedb-ipc</span>
+                    <span>Engine IPC: \\.\pipe\cleavedb-ipc · Node: {telemetry?.cluster?.node_id || '127.0.0.1:8311'}</span>
                   </div>
                   <div className="engine-status-right">
-                    <span>Term 142 · Commit Index: 1,420,580 · 0.00% Packet Loss</span>
+                    <span>Active Ports: {Object.keys(telemetry?.cluster?.active_ports || {}).length || 6} · Quorum: {telemetry?.cluster?.has_quorum ? '100% Healthy' : 'Initializing'} · 0.00% Packet Loss</span>
                   </div>
                 </div>
               </section>
@@ -925,7 +1121,7 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                 <div className="footer-meta-left">
                   <span>Showing {filteredDatabases.length} databases</span>
                   <span>·</span>
-                  <span>74.2 GB local storage allocated</span>
+                  <span>{totalSizeAllocated} local storage allocated</span>
                 </div>
                 <div className="footer-meta-right">
                   <span className="status-dot-green" />
@@ -981,7 +1177,7 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
               <span className="blank-meta-chip">
                 <span className="status-dot-green" /> {databases.length} Catalogs Loaded
               </span>
-              <span className="blank-meta-chip">74.2 GB Local Storage</span>
+              <span className="blank-meta-chip">{totalSizeAllocated} Local Storage</span>
               <span className="blank-meta-chip">Engine: Columnar LSM, KeyValue & Vector</span>
             </div>
           </div>
@@ -1130,9 +1326,9 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                   </svg>
                   <h2 className="cql-card-title">Result</h2>
                 </div>
-                <div className="cql-success-pill">
-                  <span className="cql-dot-green" />
-                  <span>Success · {cqlExecutionTime}</span>
+                <div className={`cql-${cqlStatus === 'Success' ? 'success' : 'error'}-pill`}>
+                  <span className={cqlStatus === 'Success' ? 'cql-dot-green' : 'cql-dot-red'} />
+                  <span>{cqlStatus} · {cqlExecutionTime}</span>
                 </div>
               </div>
 
@@ -1172,11 +1368,11 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                 <div className="cql-result-body">
                   <div className="cql-result-id-bar">
                     <div className="cql-doc-id-chip">
-                      <span>users:jane</span>
+                      <span>{getDocKey()}</span>
                       <button
                         type="button"
                         className="cql-copy-btn"
-                        onClick={() => handleCopyId('users:jane')}
+                        onClick={() => handleCopyId(getDocKey())}
                         title="Copy document key"
                       >
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1204,37 +1400,16 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                   </div>
 
                   <div className="cql-fields-table">
-                    <div className="cql-field-row">
-                      <div className="cql-type-icon">T</div>
-                      <div className="cql-field-name-wrap">
-                        <span className="cql-field-name">name</span>
-                        <span className="cql-field-type">string</span>
+                    {getDocumentFields().map((field, fIdx) => (
+                      <div className="cql-field-row" key={fIdx}>
+                        <div className="cql-type-icon">{field.iconType || 'T'}</div>
+                        <div className="cql-field-name-wrap">
+                          <span className="cql-field-name">{field.name}</span>
+                          <span className="cql-field-type">{field.type}</span>
+                        </div>
+                        <div className="cql-field-value">{String(field.value)}</div>
                       </div>
-                      <div className="cql-field-value">Jane</div>
-                    </div>
-
-                    <div className="cql-field-row">
-                      <div className="cql-type-icon">#</div>
-                      <div className="cql-field-name-wrap">
-                        <span className="cql-field-name">age</span>
-                        <span className="cql-field-type">number</span>
-                      </div>
-                      <div className="cql-field-value">25</div>
-                    </div>
-
-                    <div className="cql-field-row">
-                      <div className="cql-type-icon">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                          <circle cx="12" cy="10" r="3" />
-                        </svg>
-                      </div>
-                      <div className="cql-field-name-wrap">
-                        <span className="cql-field-name">city</span>
-                        <span className="cql-field-type">string</span>
-                      </div>
-                      <div className="cql-field-value">Manila</div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -1242,17 +1417,17 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
               {/* Tab Content: Raw JSON */}
               {cqlResultTab === 'raw' && (
                 <div className="cql-raw-json-view">
-                  <pre>{`{
-  "id": "users:jane",
-  "document": {
-    "name": "Jane",
-    "age": 25,
-    "city": "Manila"
-  },
-  "_partition": "partition_primary_01",
-  "_status": "committed",
-  "_timestamp": "2026-10-11T02:30:12.482Z"
-}`}</pre>
+                  <pre>{JSON.stringify(cqlResultData || {
+                    id: "users:jane",
+                    document: {
+                      name: "Jane",
+                      age: 25,
+                      city: "Manila"
+                    },
+                    _partition: "partition_primary_01",
+                    _status: "committed",
+                    _timestamp: new Date().toISOString()
+                  }, null, 2)}</pre>
                 </div>
               )}
 
@@ -1269,11 +1444,13 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                   </div>
                   <div className="cql-meta-row">
                     <span className="cql-meta-label">Consensus State</span>
-                    <span className="cql-meta-val">Healthy · Leader clv-node-01</span>
+                    <span className="cql-meta-val">
+                      {telemetry?.cluster?.has_quorum ? 'Healthy · 100% Quorum' : 'Active'} · Leader {telemetry?.cluster?.leader || '127.0.0.1:8311'}
+                    </span>
                   </div>
                   <div className="cql-meta-row">
                     <span className="cql-meta-label">Write Journal</span>
-                    <span className="cql-meta-val">Committed to WAL (148 bytes)</span>
+                    <span className="cql-meta-val">Committed to WAL</span>
                   </div>
                 </div>
               )}
@@ -1382,7 +1559,9 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                 </div>
                 <div className="settings-row">
                   <span className="settings-row-label">Privilege Level</span>
-                  <span className="settings-badge-role">Local Cluster Administrator</span>
+                  <span className="settings-badge-role">
+                    {isSuperUser ? 'Super User (Developer Access)' : 'Local Cluster Administrator'}
+                  </span>
                 </div>
                 <div className="settings-row">
                   <span className="settings-row-label">Session Status</span>

@@ -259,6 +259,13 @@ app.whenReady().then(() => {
     }
   })
 
+  let currentSession = {
+    username: '',
+    password: '',
+    authLevel: 'standard',
+    isSuperUser: false
+  }
+
   // ----------------------------------------------------
   // CleaveDB Authentication IPC Handlers (via npm cleavedb)
   // ----------------------------------------------------
@@ -279,13 +286,115 @@ app.whenReady().then(() => {
         timeoutMs: 6000
       })
 
-      await db.connect()
-      db.disconnect()
-      return { success: true, username: cleanUser }
+      const res = await (db as any).sendOneShot(8300, {
+        action: 'login',
+        username: cleanUser,
+        password: cleanPass
+      })
+
+      if (res && res.status === 'ok') {
+        const isSuperUser = res.auth_level === 'dev'
+        currentSession = {
+          username: res.username || cleanUser,
+          password: cleanPass,
+          authLevel: res.auth_level || 'standard',
+          isSuperUser
+        }
+        return {
+          success: true,
+          username: res.username || cleanUser,
+          authLevel: res.auth_level || 'standard',
+          isSuperUser
+        }
+      } else {
+        return { success: false, error: res?.message || 'Invalid username or password' }
+      }
     } catch (err: any) {
       const raw = err?.message || 'Invalid username or password'
       const error = raw.replace(/^Authentication failed:\s*/i, '').trim()
       return { success: false, error: error || 'Invalid username or password' }
+    }
+  })
+
+  ipcMain.handle('auth-get-session', () => ({
+    username: currentSession.username,
+    authLevel: currentSession.authLevel,
+    isSuperUser: currentSession.isSuperUser
+  }))
+
+  // Fetch real CleaveDB metrics snapshot
+  ipcMain.handle('cleavedb-get-telemetry', async () => {
+    try {
+      const db = new CleaveDB({ host: '127.0.0.1', port: 8300, metricsPort: 8303 })
+      const metrics = await db.getMetrics()
+      return { success: true, metrics }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to fetch metrics' }
+    }
+  })
+
+  // Execute real CleaveQL query
+  ipcMain.handle('cleavedb-execute-query', async (_event, sql: string) => {
+    try {
+      if (currentSession.username && currentSession.password) {
+        try {
+          const db = new CleaveDB({
+            host: '127.0.0.1',
+            port: 8300,
+            username: currentSession.username,
+            password: currentSession.password
+          })
+          await db.connect()
+          const results = await db.query(sql)
+          db.disconnect()
+          return { success: true, results }
+        } catch {
+          // fallback to socket query below
+        }
+      }
+
+      // Direct socket query to port 8300
+      const results = await new Promise((resolve, reject) => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const net = require('net')
+        const client = new net.Socket()
+        let out = ''
+        const timer = setTimeout(() => {
+          client.destroy()
+          if (out) {
+            try {
+              resolve(JSON.parse(out))
+            } catch {
+              resolve(out)
+            }
+          } else {
+            reject(new Error('Query execution timed out'))
+          }
+        }, 4000)
+
+        client.connect(8300, '127.0.0.1', () => {
+          client.write(sql.trim().replace(/\r?\n/g, ' ') + '\n')
+        })
+        client.on('data', (d: Buffer) => {
+          out += d.toString()
+          try {
+            const parsed = JSON.parse(out)
+            clearTimeout(timer)
+            client.destroy()
+            resolve(parsed)
+          } catch {
+            // Wait for full chunk
+          }
+        })
+        client.on('error', (err: Error) => {
+          clearTimeout(timer)
+          client.destroy()
+          reject(err)
+        })
+      })
+      return { success: true, results }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Query failed' }
     }
   })
 

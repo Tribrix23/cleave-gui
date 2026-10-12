@@ -13,7 +13,7 @@ const SECURITY_QUESTIONS = [
 ]
 
 interface LoginPageProps {
-  onSignInSuccess?: (username: string) => void
+  onSignInSuccess?: (username: string, isSuperUser?: boolean) => void
 }
 
 export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JSX.Element {
@@ -115,7 +115,7 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
         setTimeout(() => {
           setFeedbackMessage(null)
           setIsSubmitting(false)
-          onSignInSuccess?.(res.username || cleanUser)
+          onSignInSuccess?.(res.username || cleanUser, res.isSuperUser)
         }, 300)
       } else {
         setIsSubmitting(false)

@@ -58,7 +58,16 @@ const api = {
     },
     checkStatus: (): Promise<{ online: boolean }> => {
       return ipcRenderer.invoke('auth-check-status')
+    },
+    getSession: (): Promise<{ username: string; authLevel: string; isSuperUser: boolean }> => {
+      return ipcRenderer.invoke('auth-get-session')
     }
+  },
+  getTelemetry: (): Promise<{ success: boolean; metrics?: any; error?: string }> => {
+    return ipcRenderer.invoke('cleavedb-get-telemetry')
+  },
+  query: (sql: string): Promise<{ success: boolean; results?: any; error?: string }> => {
+    return ipcRenderer.invoke('cleavedb-execute-query', sql)
   }
 }
 

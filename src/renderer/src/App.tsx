@@ -6,9 +6,11 @@ import DashboardPage from './components/DashboardPage'
 function App(): React.JSX.Element {
   const [currentPage, setCurrentPage] = useState<'login' | 'dashboard'>('login')
   const [loggedInUser, setLoggedInUser] = useState<string>('')
+  const [isSuperUser, setIsSuperUser] = useState<boolean>(false)
 
-  const handleSignInSuccess = async (username: string): Promise<void> => {
+  const handleSignInSuccess = async (username: string, superUser?: boolean): Promise<void> => {
     setLoggedInUser(username)
+    setIsSuperUser(!!superUser)
     setCurrentPage('dashboard')
 
     // Trigger smooth window maximization
@@ -25,6 +27,7 @@ function App(): React.JSX.Element {
 
   const handleSignOut = async (): Promise<void> => {
     setLoggedInUser('')
+    setIsSuperUser(false)
     setCurrentPage('login')
 
     // Restore window dimensions smoothly upon sign out
@@ -44,7 +47,11 @@ function App(): React.JSX.Element {
         {currentPage === 'login' ? (
           <LoginPage onSignInSuccess={handleSignInSuccess} />
         ) : (
-          <DashboardPage username={loggedInUser} onSignOut={handleSignOut} />
+          <DashboardPage
+            username={loggedInUser}
+            isSuperUser={isSuperUser}
+            onSignOut={handleSignOut}
+          />
         )}
       </main>
     </div>

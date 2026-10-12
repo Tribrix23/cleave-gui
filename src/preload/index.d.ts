@@ -35,7 +35,15 @@ export interface WindowControlAPI {
   getSystemStorage: () => Promise<{ totalGB: number; freeGB: number; usedGB: number; percentUsed: number; drive: string }>
   onMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void
   auth: AuthAPI
-  getTelemetry: () => Promise<{ success: boolean; metrics?: any; error?: string }>
+  getTelemetry: () => Promise<{
+    success: boolean
+    metrics?: any
+    scopedDatabases?: any[]
+    dbStorageBytes?: number
+    dbStorageFormatted?: string
+    freeGB?: number
+    error?: string
+  }>
   query: (sql: string) => Promise<{ success: boolean; results?: any; error?: string }>
 }
 

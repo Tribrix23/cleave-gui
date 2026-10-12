@@ -208,6 +208,13 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null)
   const chartContainerRef = useRef<HTMLDivElement>(null)
 
+  // Live Requests & Storage Tracking State
+  const [sessionQueryHits, setSessionQueryHits] = useState(0)
+  const [dbStorageFormatted, setDbStorageFormatted] = useState('0 B')
+  const [liveBurstRps, setLiveBurstRps] = useState(0)
+  const requestTimestampsRef = useRef<number[]>([])
+  const lastServerTotalReqsRef = useRef<number>(0)
+
   // CleaveQL State
   const [cqlQuery, setCqlQuery] = useState(`POUR INTO users "jane" {
   "name": "Jane",
@@ -249,6 +256,11 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
   // Real CleaveQL Execution via window.api.query
   const handleRunCql = async (): Promise<void> => {
     const t0 = performance.now()
+    // Immediately register active user request hit & live burst
+    const nowMs = Date.now()
+    requestTimestampsRef.current.push(nowMs)
+    setSessionQueryHits((prev) => prev + 1)
+
     try {
       if (window.api?.query) {
         const res = await window.api.query(cqlQuery)
@@ -285,6 +297,36 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
       setCqlResultData([{ status: 'error', message: err?.message || 'Execution error' }])
     }
   }
+
+  // Smooth rolling request rate calculation so burst query spamming is preserved and visible
+  useEffect(() => {
+    const rpsTimer = setInterval(() => {
+      const now = Date.now()
+      // Keep timestamps in a sliding 4-second window
+      requestTimestampsRef.current = requestTimestampsRef.current.filter((t) => t > now - 4000)
+      const count = requestTimestampsRef.current.length
+      if (count > 0) {
+        // High-responsiveness burst rate
+        const rps = Math.max(1, Math.round(count / 1.5))
+        setLiveBurstRps(rps)
+        setChartPoints((prev) => {
+          const last = prev[prev.length - 1]
+          const nowStr = new Date().toTimeString().split(' ')[0]
+          const newPt: RequestDataPoint = {
+            id: (last?.id ?? 0) + 1,
+            time: nowStr,
+            requests: rps,
+            latency: parseFloat((0.45 + Math.random() * 0.4).toFixed(2))
+          }
+          return [...prev.slice(1), newPt]
+        })
+      } else {
+        setLiveBurstRps(0)
+      }
+    }, 750)
+
+    return () => clearInterval(rpsTimer)
+  }, [])
 
   const handleCopyId = (text: string): void => {
     navigator.clipboard?.writeText(text)
@@ -327,29 +369,77 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
       try {
         if (window.api?.getTelemetry) {
           const res = await window.api.getTelemetry()
-          if (res?.success && res.metrics && isMounted) {
-            setTelemetry(res.metrics)
-            if (res.metrics.databases && res.metrics.databases.length > 0) {
-              const liveDatabases: DatabaseItem[] = res.metrics.databases.map((db, idx) => ({
-                id: `db-${idx}-${db.full_name || db.name}`,
-                name: db.full_name || db.name,
-                engine: db.storage_engine || 'Columnar LSM',
-                status: (db.status as any) || 'Online',
-                size: db.size || '0 B',
-                collections: Object.keys(db.schema || {}).length || 1,
-                latency: res.metrics.latency_ms ? `${res.metrics.latency_ms.toFixed(2)} ms` : '0.42 ms',
-                lastActive: 'Active'
-              }))
-              setDatabases(liveDatabases)
+          if (res?.success && isMounted) {
+            if (res.metrics) {
+              setTelemetry(res.metrics)
+
+              // Detect server-side total request increase from external queries/CLI
+              const serverTotal = res.metrics.total_requests || 0
+              if (lastServerTotalReqsRef.current > 0 && serverTotal > lastServerTotalReqsRef.current) {
+                const delta = serverTotal - lastServerTotalReqsRef.current
+                const now = Date.now()
+                for (let i = 0; i < delta; i++) {
+                  requestTimestampsRef.current.push(now)
+                }
+              }
+              lastServerTotalReqsRef.current = serverTotal
+
+              if (res.metrics.chart_history && res.metrics.chart_history.length > 0 && requestTimestampsRef.current.length === 0) {
+                const livePts: RequestDataPoint[] = res.metrics.chart_history.map(([ts, rps, lat], idx) => ({
+                  id: idx,
+                  time: new Date(ts * 1000).toTimeString().split(' ')[0],
+                  requests: rps,
+                  latency: parseFloat((lat || 0).toFixed(2))
+                }))
+                setChartPoints(livePts)
+              }
             }
-            if (res.metrics.chart_history && res.metrics.chart_history.length > 0) {
-              const livePts: RequestDataPoint[] = res.metrics.chart_history.map(([ts, rps, lat], idx) => ({
-                id: idx,
-                time: new Date(ts * 1000).toTimeString().split(' ')[0],
-                requests: rps,
-                latency: parseFloat((lat || 0).toFixed(2))
-              }))
-              setChartPoints(livePts)
+
+            if (res.dbStorageFormatted) {
+              setDbStorageFormatted(res.dbStorageFormatted)
+            }
+
+            // Scoped Databases: prioritize server-provided scoped databases
+            if (res.scopedDatabases && res.scopedDatabases.length > 0) {
+              setDatabases(res.scopedDatabases)
+            } else if (res.metrics?.databases && res.metrics.databases.length > 0) {
+              // Fallback client-side scoping
+              const user = username || 'david'
+              const seen = new Set<string>()
+              const scoped: DatabaseItem[] = []
+              let totalBytesFallback = 0
+
+              for (const d of res.metrics.databases) {
+                if (d.name?.startsWith('_') || d.full_name?.startsWith('_')) {
+                  if (!isSuperUser) continue
+                }
+                if (d.tenant && d.tenant !== 'default' && d.tenant !== user) {
+                  continue
+                }
+                const cleanName = d.full_name?.startsWith(`${user}.`) ? d.full_name.slice(user.length + 1) : d.name
+                if (seen.has(cleanName)) continue
+                seen.add(cleanName)
+                const sz = d.size_bytes || 0
+                totalBytesFallback += sz
+                scoped.push({
+                  id: `db-${cleanName}`,
+                  name: cleanName,
+                  engine: d.storage_engine || (cleanName.startsWith('_') ? 'System Internal' : 'Document Vector'),
+                  status: (d.status as any) || 'Online',
+                  size: d.size || '0 B',
+                  collections: Object.keys(d.schema || {}).length || (d.records ? 1 : 0),
+                  latency: res.metrics.latency_ms ? `${res.metrics.latency_ms.toFixed(2)} ms` : '0.42 ms',
+                  lastActive: 'Active'
+                })
+              }
+              if (scoped.length > 0) {
+                setDatabases(scoped)
+                if (!res.dbStorageFormatted) {
+                  if (totalBytesFallback < 1024) setDbStorageFormatted(`${totalBytesFallback} B`)
+                  else if (totalBytesFallback < 1024 * 1024) setDbStorageFormatted(`${(totalBytesFallback / 1024).toFixed(1)} KB`)
+                  else setDbStorageFormatted(`${(totalBytesFallback / (1024 * 1024)).toFixed(1)} MB`)
+                }
+              }
             }
           }
         }
@@ -364,7 +454,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
       isMounted = false
       clearInterval(timer)
     }
-  }, [])
+  }, [username, isSuperUser])
 
   // Fetch real computer disk storage
   useEffect(() => {
@@ -383,7 +473,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
     return () => clearInterval(storageTimer)
   }, [])
 
-  // Real-time live chart updates (fallback if no telemetry yet)
+  // Real-time live chart updates (fallback if no server chart points)
   useEffect(() => {
     if (telemetry?.chart_history && telemetry.chart_history.length > 0) return
     const timer = setInterval(() => {
@@ -410,16 +500,14 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
     return () => clearInterval(timer)
   }, [telemetry?.chart_history])
 
-  const currentRequests = telemetry ? telemetry.requests_per_second : (chartPoints[chartPoints.length - 1]?.requests ?? 0)
+  const currentRequests = Math.max(liveBurstRps, telemetry ? telemetry.requests_per_second : 0)
   const peakRequests = Math.max(...chartPoints.map((p) => p.requests), currentRequests)
   const avgRequests = chartPoints.length > 0
     ? Math.round(chartPoints.reduce((acc, p) => acc + p.requests, 0) / chartPoints.length)
     : 0
 
-  const totalRecords = telemetry?.databases?.reduce((acc, d) => acc + (d.records || 0), 0) ?? 0
-  const totalSizeAllocated = telemetry?.storage
-    ? `${telemetry.storage.used_gb.toFixed(1)} GB`
-    : '74.2 GB'
+  const totalHits = (telemetry?.total_requests ?? 0) + sessionQueryHits
+  const totalRecords = databases.reduce((acc, d) => acc + (d.collections || 0), 0)
 
   const effectiveStorage = telemetry?.storage
     ? {
@@ -745,7 +833,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                 </span>
               </div>
               <div className="metric-value">{currentRequests.toLocaleString()} <span className="metric-unit">req/s</span></div>
-              <span className="metric-footer">{(telemetry?.total_requests ?? 1420580).toLocaleString()} Total Hits Today</span>
+              <span className="metric-footer">{totalHits.toLocaleString()} Total Hits Today</span>
             </div>
 
             {/* 2. Latency */}
@@ -776,7 +864,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                 </span>
               </div>
               <div className="metric-value">{filteredDatabases.length} <span className="metric-unit">Active</span></div>
-              <span className="metric-footer">{totalRecords.toLocaleString()} Records · {totalSizeAllocated} Allocated</span>
+              <span className="metric-footer">{totalRecords.toLocaleString()} Records · {dbStorageFormatted} Allocated</span>
             </div>
 
             {/* 4. Clusters */}
@@ -796,7 +884,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
               <span className="metric-footer">{telemetry?.cluster?.leader ? `Leader: ${telemetry.cluster.leader}` : 'clv-node-01 (Leader)'} · {telemetry?.cluster?.has_quorum ? 'Quorum Healthy' : 'Quorum Sync'}</span>
             </div>
 
-            {/* 5. Computer Storage (Based on the storage of the computer) */}
+            {/* 5. Computer Storage (Database Used / Free Storage Remaining on C:) */}
             <div className="metric-card storage-card-featured">
               <div className="metric-header">
                 <span className="metric-label">Computer Storage ({effectiveStorage.drive})</span>
@@ -809,19 +897,19 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                 </span>
               </div>
               <div className="metric-value">
-                {effectiveStorage.usedGB} <span className="metric-unit">GB / {effectiveStorage.totalGB} GB</span>
+                {dbStorageFormatted} <span className="metric-unit">/ {effectiveStorage.freeGB} GB Free</span>
               </div>
               <div className="metric-bar-container">
                 <div
                   className="metric-bar-fill"
                   style={{
-                    width: `${effectiveStorage.percentUsed}%`,
-                    backgroundColor: effectiveStorage.percentUsed > 90 ? '#ef4444' : '#0284c7'
+                    width: `${Math.min(100, Math.max(12, Math.round(((effectiveStorage.totalGB - effectiveStorage.freeGB) / effectiveStorage.totalGB) * 100)))}%`,
+                    backgroundColor: '#0284c7'
                   }}
                 />
               </div>
               <span className="metric-footer">
-                {effectiveStorage.freeGB} GB Free · {effectiveStorage.percentUsed}% Disk Used
+                Database Footprint: {dbStorageFormatted} · {effectiveStorage.freeGB} GB Free on Drive
               </span>
             </div>
           </section>
@@ -1121,7 +1209,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                 <div className="footer-meta-left">
                   <span>Showing {filteredDatabases.length} databases</span>
                   <span>·</span>
-                  <span>{totalSizeAllocated} local storage allocated</span>
+                  <span>{dbStorageFormatted} local storage allocated</span>
                 </div>
                 <div className="footer-meta-right">
                   <span className="status-dot-green" />
@@ -1177,7 +1265,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
               <span className="blank-meta-chip">
                 <span className="status-dot-green" /> {databases.length} Catalogs Loaded
               </span>
-              <span className="blank-meta-chip">{totalSizeAllocated} Local Storage</span>
+              <span className="blank-meta-chip">{dbStorageFormatted} Local Storage</span>
               <span className="blank-meta-chip">Engine: Columnar LSM, KeyValue & Vector</span>
             </div>
           </div>

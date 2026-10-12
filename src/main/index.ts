@@ -14,6 +14,7 @@ const RESTORED_WIDTH = 1250
 const RESTORED_HEIGHT = 820
 
 let cleaveProcess: ChildProcess | null = null
+let edgeGatewayProcess: ChildProcess | null = null
 
 function getCleaveShellPath(): string {
   const possiblePaths = [
@@ -29,7 +30,21 @@ function getCleaveShellPath(): string {
   return ''
 }
 
-function isServerRunning(port = 8300, host = '127.0.0.1', timeout = 1000): Promise<boolean> {
+function getEdgeGatewayPath(): string {
+  const possiblePaths = [
+    join(app.getAppPath(), 'cleaveshell', 'edge_gateway.exe'),
+    join(process.resourcesPath, 'cleaveshell', 'edge_gateway.exe'),
+    join(process.cwd(), 'cleaveshell', 'edge_gateway.exe'),
+    join(__dirname, '../../cleaveshell', 'edge_gateway.exe'),
+    join(__dirname, 'cleaveshell', 'edge_gateway.exe')
+  ]
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) return p
+  }
+  return ''
+}
+
+function isServerRunning(port = 8299, host = '127.0.0.1', timeout = 1000): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket()
     socket.setTimeout(timeout)
@@ -48,9 +63,31 @@ function isServerRunning(port = 8300, host = '127.0.0.1', timeout = 1000): Promi
   })
 }
 
+function startEdgeGatewayIfAvailable(): void {
+  const gwPath = getEdgeGatewayPath()
+  if (gwPath && fs.existsSync(gwPath)) {
+    try {
+      edgeGatewayProcess = spawn(gwPath, [], {
+        cwd: join(gwPath, '..'),
+        detached: true,
+        stdio: 'ignore'
+      })
+      edgeGatewayProcess.unref()
+    } catch (e) {
+      console.warn('Could not spawn edge_gateway.exe:', e)
+    }
+  }
+}
+
 async function ensureCleaveServerRunning(): Promise<boolean> {
-  const running = await isServerRunning(8300)
-  if (running) return true
+  const is8299 = await isServerRunning(8299)
+  const is8300 = await isServerRunning(8300)
+  if (is8299 || is8300) {
+    if (is8299 && !is8300) {
+      startEdgeGatewayIfAvailable()
+    }
+    return true
+  }
 
   const exePath = getCleaveShellPath()
   if (!exePath) {
@@ -67,11 +104,16 @@ async function ensureCleaveServerRunning(): Promise<boolean> {
     })
     cleaveProcess.unref()
 
-    // Wait for server to bind port 8300
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 500))
-      if (await isServerRunning(8300)) {
+    // Wait for server to bind port 8299 or 8300
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 400))
+      const ready8299 = await isServerRunning(8299)
+      const ready8300 = await isServerRunning(8300)
+      if (ready8299 || ready8300) {
         console.log('CleaveDB server started successfully!')
+        if (ready8299 && !ready8300) {
+          startEdgeGatewayIfAvailable()
+        }
         return true
       }
     }
@@ -79,6 +121,16 @@ async function ensureCleaveServerRunning(): Promise<boolean> {
     console.error('Error starting cleaveshell server:', err)
   }
   return false
+}
+
+async function getEffectivePort(): Promise<number> {
+  // Check if native direct socket 8299 is open, or gateway 8300
+  if (await isServerRunning(8299)) return 8299
+  if (await isServerRunning(8300)) return 8300
+  await ensureCleaveServerRunning()
+  if (await isServerRunning(8299)) return 8299
+  if (await isServerRunning(8300)) return 8300
+  return 8299
 }
 
 
@@ -135,6 +187,9 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  // Pre-warm CleaveDB server in background so connections are instant
+  ensureCleaveServerRunning().catch((err) => console.warn('Pre-warming CleaveDB failed:', err))
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('CleaveDB')
   app.setAppUserModelId('CleaveDB')
@@ -272,6 +327,7 @@ app.whenReady().then(() => {
   ipcMain.handle('auth-login', async (_event, { username, password }) => {
     try {
       await ensureCleaveServerRunning()
+      const port = await getEffectivePort()
       const cleanUser = (username || '').trim()
       const cleanPass = password || ''
       if (!cleanUser) {
@@ -280,13 +336,13 @@ app.whenReady().then(() => {
 
       const db = new CleaveDB({
         host: '127.0.0.1',
-        port: 8300,
+        port,
         username: cleanUser,
         password: cleanPass,
         timeoutMs: 6000
       })
 
-      const res = await (db as any).sendOneShot(8300, {
+      const res = await (db as any).sendOneShot(port, {
         action: 'login',
         username: cleanUser,
         password: cleanPass
@@ -322,76 +378,228 @@ app.whenReady().then(() => {
     isSuperUser: currentSession.isSuperUser
   }))
 
-  // Fetch real CleaveDB metrics snapshot
+  function formatSizeBytes(bytes: number): string {
+    if (!bytes || bytes <= 0) return '0 B'
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  }
+
+  function executeDirectSocketQuery(
+    sql: string,
+    username = currentSession.username,
+    password = currentSession.password
+  ): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const net = require('net')
+      const client = new net.Socket()
+      let out = ''
+      const timer = setTimeout(() => {
+        client.destroy()
+        if (out) {
+          try {
+            resolve(JSON.parse(out))
+          } catch {
+            resolve(out)
+          }
+        } else {
+          reject(new Error('Query execution timed out'))
+        }
+      }, 3000)
+
+      client.connect(8299, '127.0.0.1', () => {
+        if (username && password) {
+          client.write(JSON.stringify({ action: 'login', username, password, _req_id: 'q_auth' }) + '\n')
+        } else {
+          client.write(sql.trim().replace(/\r?\n/g, ' ') + '\n')
+        }
+      })
+
+      let authenticated = !username || !password
+      client.on('data', (d: Buffer) => {
+        out += d.toString()
+        if (!authenticated) {
+          try {
+            const lines = out.split('\n').filter(Boolean)
+            const first = JSON.parse(lines[0])
+            if (first && (first.payload?.status === 'ok' || first.status === 'ok')) {
+              authenticated = true
+              out = ''
+              client.write(JSON.stringify({ action: 'query', query: sql, _req_id: 'q_exec' }) + '\n')
+            }
+          } catch {
+            // wait for data chunk
+          }
+        } else {
+          try {
+            const parsed = JSON.parse(out.trim())
+            clearTimeout(timer)
+            client.destroy()
+            resolve(parsed.payload || parsed)
+          } catch {
+            // Wait for full chunk
+          }
+        }
+      })
+
+      client.on('error', (err: Error) => {
+        clearTimeout(timer)
+        client.destroy()
+        reject(err)
+      })
+    })
+  }
+
+  // Fetch real CleaveDB metrics snapshot and user-scoped database buckets
   ipcMain.handle('cleavedb-get-telemetry', async () => {
     try {
-      const db = new CleaveDB({ host: '127.0.0.1', port: 8300, metricsPort: 8303 })
+      const port = await getEffectivePort()
+      const db = new CleaveDB({ host: '127.0.0.1', port, metricsPort: 8303 })
       const metrics = await db.getMetrics()
-      return { success: true, metrics }
+
+      const user = currentSession.username || 'david'
+      const isSuper = currentSession.isSuperUser
+
+      // Retrieve visible buckets using authenticated session
+      let rawBuckets: string[] = []
+      try {
+        const bRes = await executeDirectSocketQuery('SHOW BUCKETS', user, currentSession.password)
+        if (Array.isArray(bRes) && bRes[0]?.data) {
+          rawBuckets = bRes[0].data
+        } else if (Array.isArray(bRes?.data)) {
+          rawBuckets = bRes.data
+        }
+      } catch {
+        if (metrics?.databases) {
+          rawBuckets = metrics.databases.map((d: any) => d.full_name || d.name)
+        }
+      }
+
+      // Filter buckets strictly according to user scope:
+      // - Standard user: only user's own buckets (e.g. 'users' without prefix) and global buckets (accounts, events)
+      // - Dev superuser: user's buckets + system '_' buckets (_auth, _bonds, _embeddings, etc.)
+      // - Exclude buckets belonging to other accounts (e.g. dev_user_test.*, guest.*)
+      const seen = new Set<string>()
+      const scopedBucketNames: string[] = []
+
+      for (const b of rawBuckets) {
+        if (b.startsWith('_')) {
+          if (isSuper && !seen.has(b)) {
+            seen.add(b)
+            scopedBucketNames.push(b)
+          }
+          continue
+        }
+        if (b.includes('.')) {
+          const parts = b.split('.')
+          if (parts[0] === user) {
+            const clean = parts.slice(1).join('.')
+            if (!seen.has(clean)) {
+              seen.add(clean)
+              scopedBucketNames.push(clean)
+            }
+          }
+          continue
+        }
+        if (!seen.has(b)) {
+          seen.add(b)
+          scopedBucketNames.push(b)
+        }
+      }
+
+      // Build full catalog items
+      const scopedDatabases: any[] = []
+      let dbTotalBytes = 0
+
+      for (const name of scopedBucketNames) {
+        const match = metrics?.databases?.find(
+          (d: any) => d.name === name || d.full_name === name || d.full_name === `${user}.${name}`
+        )
+
+        if (match) {
+          const szBytes = match.size_bytes || 0
+          dbTotalBytes += szBytes
+          scopedDatabases.push({
+            id: `bucket-${name}`,
+            name,
+            engine:
+              match.storage_engine ||
+              (name.startsWith('_')
+                ? 'System Internal'
+                : /event|log|metric|timeseries|ts/i.test(name)
+                  ? 'Columnar LSM'
+                  : 'Document Vector'),
+            status: match.status || 'Online',
+            size: match.size || formatSizeBytes(szBytes),
+            size_bytes: szBytes,
+            records: match.records || 0,
+            collections: Object.keys(match.schema || {}).length || (match.records ? 1 : 0),
+            schema: match.schema || {},
+            is_system: name.startsWith('_'),
+            latency: metrics.latency_ms ? `${metrics.latency_ms.toFixed(2)} ms` : '0.42 ms',
+            lastActive: 'Active'
+          })
+        } else if (name.startsWith('_')) {
+          try {
+            const descRes = await executeDirectSocketQuery(`DESCRIBE ${name}`, user, currentSession.password)
+            const d = Array.isArray(descRes) ? descRes[0] : descRes
+            const szBytes = d?.size_bytes || 0
+            dbTotalBytes += szBytes
+            scopedDatabases.push({
+              id: `bucket-${name}`,
+              name,
+              engine: d?.storage_engine || 'System Internal',
+              status: 'Online',
+              size: d?.size || formatSizeBytes(szBytes),
+              size_bytes: szBytes,
+              records: d?.records || 0,
+              collections: Object.keys(d?.schema || {}).length || 1,
+              schema: d?.schema || {},
+              is_system: true,
+              latency: metrics.latency_ms ? `${metrics.latency_ms.toFixed(2)} ms` : '0.42 ms',
+              lastActive: 'Active'
+            })
+          } catch {
+            scopedDatabases.push({
+              id: `bucket-${name}`,
+              name,
+              engine: 'System Internal',
+              status: 'Online',
+              size: '0 B',
+              size_bytes: 0,
+              records: 0,
+              collections: 1,
+              schema: {},
+              is_system: true,
+              latency: '0.42 ms',
+              lastActive: 'Active'
+            })
+          }
+        }
+      }
+
+      const freeGB = metrics?.storage?.free_gb ?? 1.8
+      const dbStorageFormatted = formatSizeBytes(dbTotalBytes)
+
+      return {
+        success: true,
+        metrics,
+        scopedDatabases,
+        dbTotalBytes,
+        dbStorageFormatted,
+        freeGB
+      }
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to fetch metrics' }
     }
   })
 
-  // Execute real CleaveQL query
+  // Execute real CleaveQL query (fast socket execution)
   ipcMain.handle('cleavedb-execute-query', async (_event, sql: string) => {
     try {
-      if (currentSession.username && currentSession.password) {
-        try {
-          const db = new CleaveDB({
-            host: '127.0.0.1',
-            port: 8300,
-            username: currentSession.username,
-            password: currentSession.password
-          })
-          await db.connect()
-          const results = await db.query(sql)
-          db.disconnect()
-          return { success: true, results }
-        } catch {
-          // fallback to socket query below
-        }
-      }
-
-      // Direct socket query to port 8300
-      const results = await new Promise((resolve, reject) => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const net = require('net')
-        const client = new net.Socket()
-        let out = ''
-        const timer = setTimeout(() => {
-          client.destroy()
-          if (out) {
-            try {
-              resolve(JSON.parse(out))
-            } catch {
-              resolve(out)
-            }
-          } else {
-            reject(new Error('Query execution timed out'))
-          }
-        }, 4000)
-
-        client.connect(8300, '127.0.0.1', () => {
-          client.write(sql.trim().replace(/\r?\n/g, ' ') + '\n')
-        })
-        client.on('data', (d: Buffer) => {
-          out += d.toString()
-          try {
-            const parsed = JSON.parse(out)
-            clearTimeout(timer)
-            client.destroy()
-            resolve(parsed)
-          } catch {
-            // Wait for full chunk
-          }
-        })
-        client.on('error', (err: Error) => {
-          clearTimeout(timer)
-          client.destroy()
-          reject(err)
-        })
-      })
+      const results = await executeDirectSocketQuery(sql, currentSession.username, currentSession.password)
       return { success: true, results }
     } catch (err: any) {
       return { success: false, error: err?.message || 'Query failed' }
@@ -401,6 +609,7 @@ app.whenReady().then(() => {
   ipcMain.handle('auth-register', async (_event, { username, password, devPassword, question, answer }) => {
     try {
       await ensureCleaveServerRunning()
+      const port = await getEffectivePort()
       const cleanUser = (username || '').trim()
       const cleanPass = password || ''
       const cleanAnswer = (answer || '').trim()
@@ -418,7 +627,7 @@ app.whenReady().then(() => {
 
       const db = new CleaveDB({
         host: '127.0.0.1',
-        port: 8300,
+        port,
         timeoutMs: 6000
       })
 
@@ -443,6 +652,7 @@ app.whenReady().then(() => {
   ipcMain.handle('auth-get-security-question', async (_event, { username }) => {
     try {
       await ensureCleaveServerRunning()
+      const port = await getEffectivePort()
       const cleanUser = (username || '').trim()
       if (!cleanUser) {
         return { success: false, error: 'Username is required' }
@@ -450,7 +660,7 @@ app.whenReady().then(() => {
 
       const db = new CleaveDB({
         host: '127.0.0.1',
-        port: 8300,
+        port,
         timeoutMs: 6000
       })
 
@@ -464,6 +674,7 @@ app.whenReady().then(() => {
   ipcMain.handle('auth-reset-password', async (_event, { username, answer, newPassword }) => {
     try {
       await ensureCleaveServerRunning()
+      const port = await getEffectivePort()
       const cleanUser = (username || '').trim()
       const cleanAnswer = (answer || '').trim()
       const cleanNewPass = newPassword || ''
@@ -480,7 +691,7 @@ app.whenReady().then(() => {
 
       const db = new CleaveDB({
         host: '127.0.0.1',
-        port: 8300,
+        port,
         timeoutMs: 6000
       })
 
@@ -501,7 +712,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('auth-check-status', async () => {
-    const running = await isServerRunning(8300)
+    const running = (await isServerRunning(8299)) || (await isServerRunning(8300))
     return { online: running }
   })
 
@@ -527,6 +738,11 @@ app.on('will-quit', () => {
   if (cleaveProcess && !cleaveProcess.killed) {
     try {
       cleaveProcess.kill()
+    } catch {}
+  }
+  if (edgeGatewayProcess && !edgeGatewayProcess.killed) {
+    try {
+      edgeGatewayProcess.kill()
     } catch {}
   }
 })

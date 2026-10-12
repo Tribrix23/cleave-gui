@@ -150,6 +150,7 @@ function generateInitialPoints(): RequestDataPoint[] {
 
 export default function DashboardPage({ username, onSignOut }: DashboardPageProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<'overview' | 'databases' | 'cleaveql' | 'settings'>('overview')
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [databases] = useState<DatabaseItem[]>(INITIAL_DATABASES)
   const [searchFilter, setSearchFilter] = useState('')
 
@@ -370,12 +371,41 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
   return (
     <div className="dashboard-container">
       {/* Left Sidebar: Continuous Column with Brand, Navigation & Clickable Profile */}
-      <aside className="dashboard-sidebar">
+      <aside className={`dashboard-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-top-section">
-          {/* Brand header with NO horizontal dividing line underneath */}
+          {/* Brand header with animated morphing collapse/open toggle icon */}
           <div className="sidebar-brand-section">
             <div className="sidebar-logo-group">
-              <img src={cleaveLogo} alt="CleaveDB Logo" className="sidebar-logo" />
+              <button
+                type="button"
+                className={`sidebar-logo-toggle-btn ${isSidebarCollapsed ? 'is-collapsed' : ''}`}
+                onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                title={isSidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+                aria-label={isSidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+              >
+                <div className="logo-icon-morph-box">
+                  {/* Default: CleaveDB 3D Logo */}
+                  <img src={cleaveLogo} alt="CleaveDB Logo" className="sidebar-logo morph-default" />
+                  {/* Hover: Morph into Collapse or Open icon smoothly */}
+                  <div className="sidebar-morph-icon morph-hover">
+                    {isSidebarCollapsed ? (
+                      /* Open sidebar icon (Panel Left Open) */
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                        <path d="M9 3v18" />
+                        <path d="m14 9 3 3-3 3" />
+                      </svg>
+                    ) : (
+                      /* Collapse sidebar icon (Panel Left Close) */
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                        <path d="M9 3v18" />
+                        <path d="m16 15-3-3 3-3" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+              </button>
               <span className="sidebar-brand-name">CleaveDB</span>
             </div>
             <span className="sidebar-badge">v4.0.1</span>
@@ -385,6 +415,7 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
             <button
               className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`}
               onClick={() => setActiveTab('overview')}
+              title={isSidebarCollapsed ? 'Overview' : undefined}
             >
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="9" />
@@ -392,38 +423,45 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
                 <rect x="14" y="12" width="7" height="9" />
                 <rect x="3" y="16" width="7" height="5" />
               </svg>
-              <span>Overview</span>
+              <span className="nav-label">Overview</span>
             </button>
 
             <button
               className={`nav-item ${activeTab === 'databases' ? 'active' : ''}`}
               onClick={() => setActiveTab('databases')}
+              title={isSidebarCollapsed ? `Databases (${databases.length})` : undefined}
             >
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <ellipse cx="12" cy="5" rx="9" ry="3" />
                 <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
                 <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
               </svg>
-              <span>Databases</span>
+              <span className="nav-label">Databases</span>
               <span className="nav-count">{databases.length}</span>
             </button>
 
             <button
               className={`nav-item ${activeTab === 'cleaveql' ? 'active' : ''}`}
               onClick={() => setActiveTab('cleaveql')}
+              title={isSidebarCollapsed ? 'CleaveQL' : undefined}
             >
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="4 17 10 12 4 7" />
                 <line x1="12" y1="19" x2="20" y2="19" />
               </svg>
-              <span>CleaveQL</span>
+              <span className="nav-label">CleaveQL</span>
             </button>
           </nav>
         </div>
 
         {/* Sidebar Footer with Logged-in Profile (Click opens Settings) */}
         <div className="sidebar-footer">
-          <div className="user-profile-card">
+          <div
+            className="user-profile-card"
+            onClick={isSidebarCollapsed ? () => setActiveTab('settings') : undefined}
+            title={isSidebarCollapsed ? `${username || 'Developer'} (Settings)` : undefined}
+            style={{ cursor: isSidebarCollapsed ? 'pointer' : 'default' }}
+          >
             <div className="user-avatar-circle">{userInitial}</div>
             <div className="user-details">
               <span className="user-username">{username || 'Developer'}</span>
@@ -436,7 +474,10 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
               <button
                 type="button"
                 className={`profile-action-btn ${activeTab === 'settings' ? 'active' : ''}`}
-                onClick={() => setActiveTab('settings')}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setActiveTab('settings')
+                }}
                 title="Settings"
                 aria-label="Settings"
               >
@@ -448,7 +489,10 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
               <button
                 type="button"
                 className="profile-action-btn signout-btn"
-                onClick={onSignOut}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSignOut()
+                }}
                 title="Sign out and return to login"
                 aria-label="Sign out"
               >

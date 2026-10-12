@@ -408,7 +408,7 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
               </button>
               <span className="sidebar-brand-name">CleaveDB</span>
             </div>
-            <span className="sidebar-badge">v4.0.1</span>
+            <span className="sidebar-badge">v4.0.2</span>
           </div>
 
           <nav className="sidebar-nav">
@@ -1406,7 +1406,7 @@ export default function DashboardPage({ username, onSignOut }: DashboardPageProp
               <div className="settings-rows">
                 <div className="settings-row">
                   <span className="settings-row-label">CleaveDB Version</span>
-                  <span className="settings-row-val font-mono">v4.0.1 (x64 Windows)</span>
+                  <span className="settings-row-val font-mono">v4.0.2 (x64 Windows)</span>
                 </div>
                 <div className="settings-row">
                   <span className="settings-row-label">Engine IPC Endpoint</span>

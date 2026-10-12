@@ -1,6 +1,9 @@
 import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import * as fs from 'fs'
+import * as net from 'net'
+import { spawn, ChildProcess } from 'child_process'
+import { CleaveDB } from 'cleavedb'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
@@ -9,6 +12,75 @@ app.setName('CleaveDB')
 
 const RESTORED_WIDTH = 1250
 const RESTORED_HEIGHT = 820
+
+let cleaveProcess: ChildProcess | null = null
+
+function getCleaveShellPath(): string {
+  const possiblePaths = [
+    join(app.getAppPath(), 'cleaveshell', 'cleaveshell.exe'),
+    join(process.resourcesPath, 'cleaveshell', 'cleaveshell.exe'),
+    join(process.cwd(), 'cleaveshell', 'cleaveshell.exe'),
+    join(__dirname, '../../cleaveshell', 'cleaveshell.exe'),
+    join(__dirname, 'cleaveshell', 'cleaveshell.exe')
+  ]
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) return p
+  }
+  return ''
+}
+
+function isServerRunning(port = 8300, host = '127.0.0.1', timeout = 1000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket()
+    socket.setTimeout(timeout)
+    socket.once('connect', () => {
+      socket.destroy()
+      resolve(true)
+    })
+    socket.once('timeout', () => {
+      socket.destroy()
+      resolve(false)
+    })
+    socket.once('error', () => {
+      resolve(false)
+    })
+    socket.connect(port, host)
+  })
+}
+
+async function ensureCleaveServerRunning(): Promise<boolean> {
+  const running = await isServerRunning(8300)
+  if (running) return true
+
+  const exePath = getCleaveShellPath()
+  if (!exePath) {
+    console.warn('CleaveShell executable not found; attempting connection to existing CleaveDB instance.')
+    return false
+  }
+
+  console.log('Starting CleaveDB server from:', exePath)
+  try {
+    cleaveProcess = spawn(exePath, ['--run-server'], {
+      cwd: join(exePath, '..'),
+      detached: true,
+      stdio: 'ignore'
+    })
+    cleaveProcess.unref()
+
+    // Wait for server to bind port 8300
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 500))
+      if (await isServerRunning(8300)) {
+        console.log('CleaveDB server started successfully!')
+        return true
+      }
+    }
+  } catch (err) {
+    console.error('Error starting cleaveshell server:', err)
+  }
+  return false
+}
+
 
 function createWindow(): void {
   // Create the browser window.
@@ -187,6 +259,143 @@ app.whenReady().then(() => {
     }
   })
 
+  // ----------------------------------------------------
+  // CleaveDB Authentication IPC Handlers (via npm cleavedb)
+  // ----------------------------------------------------
+  ipcMain.handle('auth-login', async (_event, { username, password }) => {
+    try {
+      await ensureCleaveServerRunning()
+      const cleanUser = (username || '').trim()
+      const cleanPass = password || ''
+      if (!cleanUser) {
+        return { success: false, error: 'Username is required' }
+      }
+
+      const db = new CleaveDB({
+        host: '127.0.0.1',
+        port: 8300,
+        username: cleanUser,
+        password: cleanPass,
+        timeoutMs: 6000
+      })
+
+      await db.connect()
+      db.disconnect()
+      return { success: true, username: cleanUser }
+    } catch (err: any) {
+      const raw = err?.message || 'Invalid username or password'
+      const error = raw.replace(/^Authentication failed:\s*/i, '').trim()
+      return { success: false, error: error || 'Invalid username or password' }
+    }
+  })
+
+  ipcMain.handle('auth-register', async (_event, { username, password, devPassword, question, answer }) => {
+    try {
+      await ensureCleaveServerRunning()
+      const cleanUser = (username || '').trim()
+      const cleanPass = password || ''
+      const cleanAnswer = (answer || '').trim()
+      const cleanQuestion = (question || '').trim()
+
+      if (!cleanUser) {
+        return { success: false, error: 'Username is required' }
+      }
+      if (!cleanPass) {
+        return { success: false, error: 'Password is required' }
+      }
+      if (!cleanQuestion || !cleanAnswer) {
+        return { success: false, error: 'Security question and answer are required' }
+      }
+
+      const db = new CleaveDB({
+        host: '127.0.0.1',
+        port: 8300,
+        timeoutMs: 6000
+      })
+
+      const res = await db.register({
+        username: cleanUser,
+        password: cleanPass,
+        devPassword: (devPassword || '').trim(),
+        question: cleanQuestion,
+        answer: cleanAnswer
+      })
+
+      if (res && res.status === 'ok') {
+        return { success: true, message: res.message || 'Registration successful! You can now login.' }
+      } else {
+        return { success: false, error: res?.message || 'Registration failed' }
+      }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Registration failed' }
+    }
+  })
+
+  ipcMain.handle('auth-get-security-question', async (_event, { username }) => {
+    try {
+      await ensureCleaveServerRunning()
+      const cleanUser = (username || '').trim()
+      if (!cleanUser) {
+        return { success: false, error: 'Username is required' }
+      }
+
+      const db = new CleaveDB({
+        host: '127.0.0.1',
+        port: 8300,
+        timeoutMs: 6000
+      })
+
+      const question = await db.getSecurityQuestion(cleanUser)
+      return { success: true, question }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'User not found' }
+    }
+  })
+
+  ipcMain.handle('auth-reset-password', async (_event, { username, answer, newPassword }) => {
+    try {
+      await ensureCleaveServerRunning()
+      const cleanUser = (username || '').trim()
+      const cleanAnswer = (answer || '').trim()
+      const cleanNewPass = newPassword || ''
+
+      if (!cleanUser) {
+        return { success: false, error: 'Username is required' }
+      }
+      if (!cleanAnswer) {
+        return { success: false, error: 'Security answer is required' }
+      }
+      if (!cleanNewPass) {
+        return { success: false, error: 'New password is required' }
+      }
+
+      const db = new CleaveDB({
+        host: '127.0.0.1',
+        port: 8300,
+        timeoutMs: 6000
+      })
+
+      const res = await db.resetPassword({
+        username: cleanUser,
+        answer: cleanAnswer,
+        newPassword: cleanNewPass
+      })
+
+      if (res && res.status === 'ok') {
+        return { success: true, message: res.message || 'Password reset successfully!' }
+      } else {
+        return { success: false, error: res?.message || 'Password reset failed' }
+      }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Invalid answer or recovery failed' }
+    }
+  })
+
+  ipcMain.handle('auth-check-status', async () => {
+    const running = await isServerRunning(8300)
+    return { online: running }
+  })
+
   createWindow()
 
   app.on('activate', function () {
@@ -205,5 +414,11 @@ app.on('window-all-closed', () => {
   }
 })
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
+app.on('will-quit', () => {
+  if (cleaveProcess && !cleaveProcess.killed) {
+    try {
+      cleaveProcess.kill()
+    } catch {}
+  }
+})
+

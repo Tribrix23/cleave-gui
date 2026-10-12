@@ -44,70 +44,191 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState('')
   const [showForgotNewPassword, setShowForgotNewPassword] = useState(false)
   const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false)
-  const [forgotQuestionIndex, setForgotQuestionIndex] = useState(0)
+  const [forgotQuestion, setForgotQuestion] = useState('')
+  const [isQuestionLoaded, setIsQuestionLoaded] = useState(false)
+  const [isLookingUpQuestion, setIsLookingUpQuestion] = useState(false)
 
   // Random Question State (Signup)
   const [signupQuestionIndex, setSignupQuestionIndex] = useState(0)
 
   // Notification / Feedback State
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Unlock check for Forgot Password: password fields are enabled ONLY when username & answer are filled
-  const isVerificationComplete = forgotUsername.trim().length > 0 && forgotSecurityAnswer.trim().length > 0
+  // Unlock check for Forgot Password: password fields are enabled ONLY when question is loaded & answer is filled
+  const isVerificationComplete = isQuestionLoaded && forgotSecurityAnswer.trim().length > 0
 
   const handleNextSignupQuestion = (): void => {
     setSignupQuestionIndex((prev) => (prev + 1) % SECURITY_QUESTIONS.length)
   }
 
-  const handleNextForgotQuestion = (): void => {
-    setForgotQuestionIndex((prev) => (prev + 1) % SECURITY_QUESTIONS.length)
-  }
-
-  const handleSigninSubmit = (e: React.FormEvent): void => {
-    e.preventDefault()
-    setFeedbackMessage(`Signing in as ${signinUsername}...`)
-    setTimeout(() => {
-      setFeedbackMessage(null)
-      onSignInSuccess?.(signinUsername)
-    }, 350)
-  }
-
-  const handleSignupSubmit = (e: React.FormEvent): void => {
-    e.preventDefault()
-    if (signupPassword !== confirmPassword) {
-      setFeedbackMessage('Error: Passwords do not match!')
-      setTimeout(() => setFeedbackMessage(null), 3000)
+  // Lookup Security Question from CleaveDB
+  const handleLookupSecurityQuestion = async (userToLookup?: string): Promise<void> => {
+    const targetUser = (userToLookup ?? forgotUsername).trim()
+    if (!targetUser) {
+      setFeedbackMessage('Error: Please enter your username first.')
       return
     }
-    setFeedbackMessage(`Account created for ${username}! You can now sign in.`)
-    setTimeout(() => {
-      setFeedbackMessage(null)
-      setAuthMode('signin')
-      setSigninUsername(username)
-    }, 2000)
+
+    setIsLookingUpQuestion(true)
+    setFeedbackMessage(`Looking up security challenge for @${targetUser}...`)
+
+    try {
+      const res = await window.api.auth.getSecurityQuestion(targetUser)
+      setIsLookingUpQuestion(false)
+      if (res.success && res.question) {
+        setForgotQuestion(res.question)
+        setIsQuestionLoaded(true)
+        setFeedbackMessage(null)
+      } else {
+        setIsQuestionLoaded(false)
+        setForgotQuestion('')
+        setFeedbackMessage(`Error: ${res.error || 'User not found in CleaveDB'}`)
+      }
+    } catch (err: any) {
+      setIsLookingUpQuestion(false)
+      setIsQuestionLoaded(false)
+      setForgotQuestion('')
+      setFeedbackMessage(`Error: ${err?.message || 'Failed to connect to CleaveDB'}`)
+    }
   }
 
-  const handleForgotSubmit = (e: React.FormEvent): void => {
+  const handleSigninSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
-    if (!isVerificationComplete) {
-      setFeedbackMessage('Error: Please complete your username and answer first.')
-      setTimeout(() => setFeedbackMessage(null), 3000)
+    const cleanUser = signinUsername.trim()
+    if (!cleanUser || !signinPassword) {
+      setFeedbackMessage('Error: Please enter both username and password.')
+      return
+    }
+
+    setIsSubmitting(true)
+    setFeedbackMessage(`Authenticating with CleaveDB...`)
+
+    try {
+      const res = await window.api.auth.login({
+        username: cleanUser,
+        password: signinPassword
+      })
+
+      if (res.success) {
+        setFeedbackMessage('Login successful! Redirecting...')
+        setTimeout(() => {
+          setFeedbackMessage(null)
+          setIsSubmitting(false)
+          onSignInSuccess?.(res.username || cleanUser)
+        }, 300)
+      } else {
+        setIsSubmitting(false)
+        setFeedbackMessage(`Error: ${res.error || 'Invalid username or password'}`)
+      }
+    } catch (err: any) {
+      setIsSubmitting(false)
+      setFeedbackMessage(`Error: ${err?.message || 'Failed to connect to CleaveDB'}`)
+    }
+  }
+
+  const handleSignupSubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    const cleanUser = username.trim()
+    if (!cleanUser || !signupPassword) {
+      setFeedbackMessage('Error: Username and password are required.')
+      return
+    }
+    if (signupPassword !== confirmPassword) {
+      setFeedbackMessage('Error: Passwords do not match!')
+      return
+    }
+    if (!securityAnswer.trim()) {
+      setFeedbackMessage('Error: Please provide an answer to the security challenge.')
+      return
+    }
+
+    setIsSubmitting(true)
+    setFeedbackMessage('Creating account in CleaveDB...')
+
+    try {
+      const res = await window.api.auth.register({
+        username: cleanUser,
+        password: signupPassword,
+        devPassword: devPassword.trim(),
+        question: SECURITY_QUESTIONS[signupQuestionIndex],
+        answer: securityAnswer.trim()
+      })
+
+      setIsSubmitting(false)
+      if (res.success) {
+        setFeedbackMessage(`Account created for ${cleanUser}! You can now sign in.`)
+        setTimeout(() => {
+          setFeedbackMessage(null)
+          setAuthMode('signin')
+          setSigninUsername(cleanUser)
+          setSigninPassword('')
+          setUsername('')
+          setSignupPassword('')
+          setConfirmPassword('')
+          setDevPassword('')
+          setSecurityAnswer('')
+        }, 1500)
+      } else {
+        setFeedbackMessage(`Error: ${res.error || 'Registration failed'}`)
+      }
+    } catch (err: any) {
+      setIsSubmitting(false)
+      setFeedbackMessage(`Error: ${err?.message || 'Failed to connect to CleaveDB'}`)
+    }
+  }
+
+  const handleForgotSubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    if (!isQuestionLoaded) {
+      setFeedbackMessage('Error: Please enter your username and lookup your question first.')
+      return
+    }
+    if (!forgotSecurityAnswer.trim()) {
+      setFeedbackMessage('Error: Please answer the security challenge.')
+      return
+    }
+    if (!forgotNewPassword) {
+      setFeedbackMessage('Error: Please enter a new password.')
       return
     }
     if (forgotNewPassword !== forgotConfirmPassword) {
       setFeedbackMessage('Error: Passwords do not match!')
-      setTimeout(() => setFeedbackMessage(null), 3000)
       return
     }
-    setFeedbackMessage('Password successfully updated! Redirecting to sign in...')
-    setTimeout(() => {
-      setFeedbackMessage(null)
-      setAuthMode('signin')
-      setSigninUsername(forgotUsername)
-      setForgotNewPassword('')
-      setForgotConfirmPassword('')
-      setForgotSecurityAnswer('')
-    }, 2000)
+
+    setIsSubmitting(true)
+    setFeedbackMessage('Verifying challenge and resetting password in CleaveDB...')
+
+    try {
+      const res = await window.api.auth.resetPassword({
+        username: forgotUsername.trim(),
+        answer: forgotSecurityAnswer.trim(),
+        newPassword: forgotNewPassword
+      })
+
+      setIsSubmitting(false)
+      if (res.success) {
+        setFeedbackMessage('Password successfully updated! Redirecting to sign in...')
+        setTimeout(() => {
+          setFeedbackMessage(null)
+          setAuthMode('signin')
+          setSigninUsername(forgotUsername.trim())
+          setSigninPassword('')
+          setForgotUsername('')
+          setForgotSecurityAnswer('')
+          setForgotNewPassword('')
+          setForgotConfirmPassword('')
+          setIsQuestionLoaded(false)
+          setForgotQuestion('')
+        }, 1500)
+      } else {
+        setFeedbackMessage(`Error: ${res.error || 'Invalid answer or recovery failed'}`)
+      }
+    } catch (err: any) {
+      setIsSubmitting(false)
+      setFeedbackMessage(`Error: ${err?.message || 'Failed to connect to CleaveDB'}`)
+    }
   }
 
   return (
@@ -230,6 +351,11 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
                       onClick={() => {
                         setAuthMode('forgot')
                         setFeedbackMessage(null)
+                        const user = signinUsername.trim()
+                        if (user) {
+                          setForgotUsername(user)
+                          handleLookupSecurityQuestion(user)
+                        }
                       }}
                     >
                       Forgot password?
@@ -237,8 +363,8 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
                   </div>
 
                   {/* Sign in Button */}
-                  <button type="submit" className="submit-sign-in-btn">
-                    <span>Sign in</span>
+                  <button type="submit" className="submit-sign-in-btn" disabled={isSubmitting}>
+                    <span>{isSubmitting ? 'Signing in...' : 'Sign in'}</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="5" y1="12" x2="19" y2="12" />
                       <polyline points="12 5 19 12 12 19" />
@@ -408,10 +534,9 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
                         id="signup-dev-password"
                         type={showDevPassword ? 'text' : 'password'}
                         className="form-input"
-                        placeholder="Enter developer key / password"
+                        placeholder="Enter developer key / password (optional)"
                         value={devPassword}
                         onChange={(e) => setDevPassword(e.target.value)}
-                        required
                       />
                       <button
                         type="button"
@@ -481,8 +606,8 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
                   </div>
 
                   {/* Submit Create Account Button */}
-                  <button type="submit" className="submit-sign-in-btn">
-                    <span>Create account</span>
+                  <button type="submit" className="submit-sign-in-btn" disabled={isSubmitting}>
+                    <span>{isSubmitting ? 'Creating account...' : 'Create account'}</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="5" y1="12" x2="19" y2="12" />
                       <polyline points="12 5 19 12 12 19" />
@@ -538,14 +663,32 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
                         className="form-input"
                         placeholder="Enter your username"
                         value={forgotUsername}
-                        onChange={(e) => setForgotUsername(e.target.value)}
+                        onChange={(e) => {
+                          setForgotUsername(e.target.value)
+                          setIsQuestionLoaded(false)
+                          setForgotQuestion('')
+                        }}
+                        onBlur={() => {
+                          if (forgotUsername.trim() && !isQuestionLoaded) {
+                            handleLookupSecurityQuestion(forgotUsername.trim())
+                          }
+                        }}
                         required
                         autoFocus
                       />
+                      <button
+                        type="button"
+                        className="password-toggle-btn"
+                        onClick={() => handleLookupSecurityQuestion(forgotUsername.trim())}
+                        title="Lookup registered security question in CleaveDB"
+                        style={{ width: 'auto', padding: '0 12px', fontSize: '12px', fontWeight: 600, color: '#2563eb' }}
+                      >
+                        {isLookingUpQuestion ? 'Finding...' : 'Lookup'}
+                      </button>
                     </div>
                   </div>
 
-                  {/* 2. Mock Security Question & Answer Field */}
+                  {/* 2. Registered Security Question & Answer Field */}
                   <div className="form-group security-challenge-group">
                     <div className="security-question-banner">
                       <div className="question-banner-header">
@@ -553,22 +696,28 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                           </svg>
-                          Security Challenge
+                          {isQuestionLoaded ? 'Verified Security Challenge' : 'Security Challenge'}
                         </span>
                         <button
                           type="button"
                           className="refresh-question-btn"
-                          onClick={handleNextForgotQuestion}
-                          title="Try another mock challenge question"
+                          onClick={() => handleLookupSecurityQuestion(forgotUsername.trim())}
+                          title="Refresh user security challenge from CleaveDB"
                         >
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="23 4 23 10 17 10" />
                             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
                           </svg>
-                          <span>Mock question</span>
+                          <span>{isQuestionLoaded ? 'Re-fetch' : 'Find Question'}</span>
                         </button>
                       </div>
-                      <p className="question-text">{SECURITY_QUESTIONS[forgotQuestionIndex]}</p>
+                      <p className="question-text">
+                        {isQuestionLoaded
+                          ? forgotQuestion
+                          : isLookingUpQuestion
+                          ? 'Contacting CleaveDB...'
+                          : 'Enter your username above and click Lookup to retrieve your registered security question.'}
+                      </p>
                     </div>
 
                     <div className="input-wrapper">
@@ -583,9 +732,10 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
                         id="forgot-security-answer"
                         type="text"
                         className="form-input"
-                        placeholder="Enter your registered answer"
+                        placeholder={isQuestionLoaded ? 'Enter your registered answer' : 'Lookup username first to answer'}
                         value={forgotSecurityAnswer}
                         onChange={(e) => setForgotSecurityAnswer(e.target.value)}
+                        disabled={!isQuestionLoaded}
                         required
                       />
                     </div>
@@ -709,10 +859,10 @@ export default function LoginPage({ onSignInSuccess }: LoginPageProps): React.JS
                   <button
                     type="submit"
                     className="submit-sign-in-btn"
-                    disabled={!isVerificationComplete}
-                    style={!isVerificationComplete ? { opacity: 0.65, cursor: 'not-allowed' } : {}}
+                    disabled={!isVerificationComplete || isSubmitting}
+                    style={!isVerificationComplete || isSubmitting ? { opacity: 0.65, cursor: 'not-allowed' } : {}}
                   >
-                    <span>Reset password</span>
+                    <span>{isSubmitting ? 'Resetting password...' : 'Reset password'}</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="5" y1="12" x2="19" y2="12" />
                       <polyline points="12 5 19 12 12 19" />

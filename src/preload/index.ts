@@ -32,6 +32,33 @@ const api = {
     return (): void => {
       ipcRenderer.removeListener('window-maximize-change', handler)
     }
+  },
+  auth: {
+    login: (credentials: { username: string; password: string }): Promise<{ success: boolean; username?: string; error?: string }> => {
+      return ipcRenderer.invoke('auth-login', credentials)
+    },
+    register: (data: {
+      username: string
+      password: string
+      devPassword?: string
+      question: string
+      answer: string
+    }): Promise<{ success: boolean; message?: string; error?: string }> => {
+      return ipcRenderer.invoke('auth-register', data)
+    },
+    getSecurityQuestion: (username: string): Promise<{ success: boolean; question?: string; error?: string }> => {
+      return ipcRenderer.invoke('auth-get-security-question', { username })
+    },
+    resetPassword: (data: {
+      username: string
+      answer: string
+      newPassword: string
+    }): Promise<{ success: boolean; message?: string; error?: string }> => {
+      return ipcRenderer.invoke('auth-reset-password', data)
+    },
+    checkStatus: (): Promise<{ online: boolean }> => {
+      return ipcRenderer.invoke('auth-check-status')
+    }
   }
 }
 

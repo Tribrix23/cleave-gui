@@ -91,13 +91,11 @@ export default function TitleBar({ title = 'CleaveDB', isDashboard = false }: Ti
                 {openMenu === 'cleavedb' && !activeHelpModal && (
                   <div className="titlebar-dropdown-panel animate-in">
                     <div className="dropdown-version-row">
-                      <div className="dropdown-item-icon version-icon">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="12" y1="16" x2="12" y2="12" />
-                          <line x1="12" y1="8" x2="12.01" y2="8" />
-                        </svg>
-                      </div>
+                      <svg className="dropdown-item-black-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="16" x2="12" y2="12" />
+                        <line x1="12" y1="8" x2="12.01" y2="8" />
+                      </svg>
                       <div className="dropdown-item-text">
                         <span className="item-title">Current version: 4.0.2</span>
                         <span className="item-desc">Production release</span>
@@ -114,14 +112,12 @@ export default function TitleBar({ title = 'CleaveDB', isDashboard = false }: Ti
                         setActiveHelpModal('update')
                       }}
                     >
-                      <div className="dropdown-item-icon update-icon">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                          <path d="M3 3v5h5" />
-                          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                          <path d="M16 21h5v-5" />
-                        </svg>
-                      </div>
+                      <svg className="dropdown-item-black-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                        <path d="M16 21h5v-5" />
+                      </svg>
                       <div className="dropdown-item-text">
                         <span className="item-title">Check for Updates</span>
                         <span className="item-desc">Check for new releases</span>
@@ -153,12 +149,10 @@ export default function TitleBar({ title = 'CleaveDB', isDashboard = false }: Ti
                         setActiveHelpModal('tutorial')
                       }}
                     >
-                      <div className="dropdown-item-icon tutorial-icon">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                        </svg>
-                      </div>
+                      <svg className="dropdown-item-black-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                      </svg>
                       <div className="dropdown-item-text">
                         <span className="item-title">Tutorial</span>
                         <span className="item-desc">Interactive guide & tour</span>
@@ -175,12 +169,10 @@ export default function TitleBar({ title = 'CleaveDB', isDashboard = false }: Ti
                         setActiveHelpModal('contact')
                       }}
                     >
-                      <div className="dropdown-item-icon contact-icon">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect width="20" height="16" x="2" y="4" rx="2" />
-                          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                        </svg>
-                      </div>
+                      <svg className="dropdown-item-black-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="20" height="16" x="2" y="4" rx="2" />
+                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                      </svg>
                       <div className="dropdown-item-text">
                         <span className="item-title">Contact Developer</span>
                         <span className="item-desc">Support & email inquiries</span>

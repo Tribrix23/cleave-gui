@@ -150,7 +150,7 @@ function generateInitialPoints(): RequestDataPoint[] {
 
 export default function DashboardPage({ username, onSignOut }: DashboardPageProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<'overview' | 'databases' | 'cleaveql' | 'settings'>('overview')
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true)
   const [databases] = useState<DatabaseItem[]>(INITIAL_DATABASES)
   const [searchFilter, setSearchFilter] = useState('')
 

@@ -79,6 +79,13 @@ interface BucketDocument {
   size?: string
 }
 
+interface ColumnField {
+  id: string
+  name: string
+  type: 'string' | 'integer' | 'float' | 'boolean' | 'date' | 'array' | 'object'
+  defaultValue: string
+}
+
 function formatDocSize(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B'
   if (bytes < 1024) return `${bytes} B`
@@ -215,16 +222,181 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
   const [docModalTab, setDocModalTab] = useState<'fields' | 'json'>('fields')
   const [docCopied, setDocCopied] = useState(false)
 
-  // ESC key handler for Document Modal
+  // Supabase-Style Right Slide-Out Drawer State
+  const [isNewDrawerOpen, setIsNewDrawerOpen] = useState(false)
+  const [newBucketName, setNewBucketName] = useState('')
+  const [newBucketDescription, setNewBucketDescription] = useState('')
+  const [policyAudited, setPolicyAudited] = useState(true)
+  const [policyVersioned, setPolicyVersioned] = useState(true)
+  const [policyMaxDocsEnabled, setPolicyMaxDocsEnabled] = useState(false)
+  const [policyMaxDocs, setPolicyMaxDocs] = useState<number>(500)
+  const [policyTtlEnabled, setPolicyTtlEnabled] = useState(false)
+  const [policyTtlValue, setPolicyTtlValue] = useState<number>(3600)
+  const [policyTtlUnit, setPolicyTtlUnit] = useState<'SECONDS' | 'MINUTES' | 'HOURS' | 'DAYS'>('SECONDS')
+
+  const [idStrategy, setIdStrategy] = useState<'RANDOM' | 'CUSTOM'>('RANDOM')
+  const [customIdValue, setCustomIdValue] = useState('')
+
+  const [columns, setColumns] = useState<ColumnField[]>([
+    { id: 'col_1', name: 'created_at', type: 'date', defaultValue: '_dtz_' },
+    { id: 'col_2', name: 'title', type: 'string', defaultValue: 'New Item' },
+    { id: 'col_3', name: 'status', type: 'string', defaultValue: 'active' }
+  ])
+
+  const [drawerError, setDrawerError] = useState<string | null>(null)
+  const [drawerSuccess, setDrawerSuccess] = useState<string | null>(null)
+  const [isDrawerSubmitting, setIsDrawerSubmitting] = useState(false)
+  const [showCqlPreview, setShowCqlPreview] = useState(true)
+
+  // ESC key handler for Document Modal and Right Slide-out Drawer
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
-        setSelectedDoc(null)
+        if (selectedDoc) {
+          setSelectedDoc(null)
+        } else if (isNewDrawerOpen) {
+          setIsNewDrawerOpen(false)
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [selectedDoc, isNewDrawerOpen])
+
+  const handleAddColumn = (): void => {
+    const newId = 'col_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)
+    setColumns((prev) => [
+      ...prev,
+      { id: newId, name: '', type: 'string', defaultValue: '' }
+    ])
+  }
+
+  const handleRemoveColumn = (colId: string): void => {
+    setColumns((prev) => prev.filter((c) => c.id !== colId))
+  }
+
+  const handleUpdateColumn = (colId: string, updates: Partial<ColumnField>): void => {
+    setColumns((prev) => prev.map((c) => (c.id === colId ? { ...c, ...updates } : c)))
+  }
+
+  const generateCleaveQLStatements = (): { shapeQuery: string | null; pourQuery: string } => {
+    const rawName = (newBucketName || (selectedBucket ? selectedBucket.name : 'my_bucket')).trim()
+    const bName = rawName.replace(/[^a-zA-Z0-9_]/g, '_') || 'my_bucket'
+
+    const policies: string[] = []
+    if (policyAudited) policies.push('AUDITED')
+    if (policyVersioned) policies.push('VERSIONED')
+    if (policyMaxDocsEnabled && policyMaxDocs > 0) policies.push(`MAX DOCUMENTS ${policyMaxDocs}`)
+    if (policyTtlEnabled && policyTtlValue > 0) policies.push(`TTL ${policyTtlValue} ${policyTtlUnit}`)
+
+    const shapeQuery = policies.length > 0 ? `SHAPE BUCKET ${bName} ${policies.join(' ')}` : null
+
+    const docObj: Record<string, any> = {}
+    columns.forEach((col) => {
+      const key = col.name.trim()
+      if (!key) return
+      const val = col.defaultValue
+      if (col.type === 'integer') {
+        const num = parseInt(val, 10)
+        docObj[key] = isNaN(num) ? 0 : num
+      } else if (col.type === 'float') {
+        const f = parseFloat(val)
+        docObj[key] = isNaN(f) ? 0.0 : f
+      } else if (col.type === 'boolean') {
+        docObj[key] = val.toLowerCase() === 'true'
+      } else if (col.type === 'array') {
+        try {
+          docObj[key] = JSON.parse(val)
+        } catch {
+          docObj[key] = []
+        }
+      } else if (col.type === 'object') {
+        try {
+          docObj[key] = JSON.parse(val)
+        } catch {
+          docObj[key] = {}
+        }
+      } else {
+        docObj[key] = val
+      }
+    })
+
+    const idClause =
+      idStrategy === 'RANDOM'
+        ? 'RANDOM'
+        : `"${(customIdValue.trim() || 'item_1').replace(/"/g, '\\"')}"`
+
+    const pourQuery = `POUR INTO ${bName} ${idClause} ${JSON.stringify(docObj, null, 2)}`
+    return { shapeQuery, pourQuery }
+  }
+
+  const handleSaveAndPour = async (): Promise<void> => {
+    setDrawerError(null)
+    setDrawerSuccess(null)
+
+    const rawName = (newBucketName || (selectedBucket ? selectedBucket.name : '')).trim()
+    if (!rawName) {
+      setDrawerError('Please enter a bucket name.')
+      return
+    }
+
+    const reservedWords = ['buckets', 'coordinator_nodes', 'raft_nodes', '_rubbish', '_bonds']
+    if (reservedWords.includes(rawName.toLowerCase())) {
+      setDrawerError(`"${rawName}" is a reserved system keyword in CleaveDB.`)
+      return
+    }
+
+    if (idStrategy === 'CUSTOM' && !customIdValue.trim()) {
+      setDrawerError('Please enter a custom Document ID, or select "RANDOM".')
+      return
+    }
+
+    const { shapeQuery, pourQuery } = generateCleaveQLStatements()
+    setIsDrawerSubmitting(true)
+
+    try {
+      if (window.api?.query) {
+        if (shapeQuery) {
+          const shapeRes = await window.api.query(shapeQuery)
+          if (!shapeRes?.success && shapeRes?.error) {
+            console.warn('Shape warning/error:', shapeRes.error)
+          }
+        }
+
+        const pourRes = await window.api.query(pourQuery)
+        if (!pourRes || (!pourRes.success && pourRes.error)) {
+          setDrawerError(pourRes?.error || 'Failed to pour document into CleaveDB')
+          setIsDrawerSubmitting(false)
+          return
+        }
+
+        setDrawerSuccess(`Successfully poured document into bucket "${rawName}"!`)
+
+        if (window.api?.getTelemetry) {
+          const teleRes = await window.api.getTelemetry()
+          if (teleRes?.scopedDatabases) {
+            setDatabases(teleRes.scopedDatabases)
+          }
+        }
+
+        if (selectedBucket && selectedBucket.name.toLowerCase() === rawName.toLowerCase()) {
+          await loadBucketDocuments(rawName)
+        }
+
+        setTimeout(() => {
+          setIsNewDrawerOpen(false)
+          setDrawerSuccess(null)
+          setIsDrawerSubmitting(false)
+        }, 750)
+      } else {
+        setDrawerError('Database connection API is not available.')
+        setIsDrawerSubmitting(false)
+      }
+    } catch (err: any) {
+      setDrawerError(err?.message || 'Unexpected error occurred while querying CleaveDB.')
+      setIsDrawerSubmitting(false)
+    }
+  }
 
   // Copy JSON inside modal
   const handleCopyDocJson = async (): Promise<void> => {
@@ -1244,8 +1416,10 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                   <button
                     className="btn-primary"
                     onClick={() => {
-                      setCqlQuery(`POUR INTO users "new_item_${Date.now().toString().slice(-4)}" {\n  "name": "New Record",\n  "status": "active"\n}`)
-                      setActiveTab('cleaveql')
+                      setNewBucketName('')
+                      setDrawerError(null)
+                      setDrawerSuccess(null)
+                      setIsNewDrawerOpen(true)
                     }}
                     type="button"
                   >
@@ -1253,7 +1427,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                       <line x1="12" y1="5" x2="12" y2="19" />
                       <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
-                    <span>New Bucket / Pour</span>
+                    <span>New</span>
                   </button>
                 </div>
               </div>
@@ -1276,8 +1450,8 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                   </span>
                 </div>
                 <div className="breadcrumbs-right">
-                  <div className="search-input-wrapper">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <div className="explorer-search-bar">
+                    <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="11" cy="11" r="8" />
                       <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
@@ -1288,6 +1462,19 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                       value={bucketSearchFilter}
                       onChange={(e) => setBucketSearchFilter(e.target.value)}
                     />
+                    {bucketSearchFilter && (
+                      <button
+                        type="button"
+                        className="explorer-search-clear"
+                        onClick={() => setBucketSearchFilter('')}
+                        title="Clear filter"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1401,16 +1588,18 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                   <button
                     className="btn-primary"
                     onClick={() => {
-                      setCqlQuery(`POUR INTO ${selectedBucket.name} "record_${Date.now()}" {\n  "title": "New Record",\n  "status": "active"\n}`)
-                      setActiveTab('cleaveql')
+                      setNewBucketName(selectedBucket.name)
+                      setDrawerError(null)
+                      setDrawerSuccess(null)
+                      setIsNewDrawerOpen(true)
                     }}
                     type="button"
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19" />
                       <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
-                    <span>Pour Document</span>
+                    <span>New</span>
                   </button>
                 </div>
               </div>
@@ -1440,8 +1629,8 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                   </span>
                 </div>
                 <div className="breadcrumbs-right">
-                  <div className="search-input-wrapper">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <div className="explorer-search-bar">
+                    <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="11" cy="11" r="8" />
                       <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
@@ -1452,6 +1641,19 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                       value={docSearchFilter}
                       onChange={(e) => setDocSearchFilter(e.target.value)}
                     />
+                    {docSearchFilter && (
+                      <button
+                        type="button"
+                        className="explorer-search-clear"
+                        onClick={() => setDocSearchFilter('')}
+                        title="Clear search"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2187,6 +2389,473 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
           </div>
         </div>
       )}
+
+      {/* SUPABASE-STYLE SLIDE-OUT DRAWER (RIGHT SIDEBAR) */}
+      <div
+        className={`supabase-drawer-backdrop ${isNewDrawerOpen ? 'open' : ''}`}
+        onClick={() => {
+          if (!isDrawerSubmitting) setIsNewDrawerOpen(false)
+        }}
+      />
+      <div className={`supabase-drawer-panel ${isNewDrawerOpen ? 'open' : ''}`}>
+        {/* Drawer Header */}
+        <div className="supabase-drawer-header">
+          <div className="supabase-drawer-header-left">
+            <div className="supabase-drawer-title-row">
+              <h3 className="supabase-drawer-title">
+                {selectedBucket ? `Insert document under ${selectedBucket.name}` : 'Create a new bucket'}
+              </h3>
+              <span className="supabase-drawer-schema-pill">cleavedb</span>
+            </div>
+            <p className="supabase-drawer-subtitle">
+              Configure bucket policies and define initial schema attributes according to CleaveDB specifications.
+            </p>
+          </div>
+          <button
+            className="supabase-drawer-close-btn"
+            onClick={() => setIsNewDrawerOpen(false)}
+            type="button"
+            title="Close drawer (Esc)"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Scrollable Body */}
+        <div className="supabase-drawer-body">
+          {drawerError && (
+            <div className="drawer-banner-error">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>{drawerError}</span>
+            </div>
+          )}
+
+          {drawerSuccess && (
+            <div className="drawer-banner-success">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+              <span>{drawerSuccess}</span>
+            </div>
+          )}
+
+          {/* Bucket Name */}
+          <div className="drawer-field-group">
+            <label className="drawer-field-label">
+              <span>Bucket Name</span>
+              <span className="required-star">*</span>
+            </label>
+            <input
+              type="text"
+              className="drawer-field-input mono"
+              placeholder="e.g. users, products, telemetry"
+              value={newBucketName}
+              onChange={(e) => setNewBucketName(e.target.value)}
+            />
+            <span className="drawer-field-hint">
+              Documents in CleaveDB are grouped into buckets. Names are alphanumeric with underscores.
+            </span>
+          </div>
+
+          {/* Description (Optional) */}
+          <div className="drawer-field-group">
+            <label className="drawer-field-label">Description</label>
+            <input
+              type="text"
+              className="drawer-field-input"
+              placeholder="Optional schema description or notes"
+              value={newBucketDescription}
+              onChange={(e) => setNewBucketDescription(e.target.value)}
+            />
+          </div>
+
+          {/* Policies Box */}
+          <div className="drawer-policies-container">
+            <div className="drawer-policies-header">
+              <h4>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span>CleaveDB Bucket Policies (SHAPE BUCKET)</span>
+              </h4>
+            </div>
+
+            {/* AUDITED */}
+            <div className="drawer-policy-item">
+              <input
+                type="checkbox"
+                id="policy-audited"
+                className="drawer-policy-checkbox"
+                checked={policyAudited}
+                onChange={(e) => setPolicyAudited(e.target.checked)}
+              />
+              <div className="drawer-policy-content">
+                <label htmlFor="policy-audited" className="drawer-policy-title-row" style={{ cursor: 'pointer' }}>
+                  <span className="drawer-policy-title">Enable Auditing (AUDITED)</span>
+                  <span className="drawer-policy-badge">RECOMMENDED</span>
+                </label>
+                <div className="drawer-policy-desc">
+                  Logs all document mutations into CleaveDB's internal <code>_audit_{'{bucket}'}</code> stream.
+                </div>
+              </div>
+            </div>
+
+            {/* VERSIONED */}
+            <div className="drawer-policy-item">
+              <input
+                type="checkbox"
+                id="policy-versioned"
+                className="drawer-policy-checkbox"
+                checked={policyVersioned}
+                onChange={(e) => setPolicyVersioned(e.target.checked)}
+              />
+              <div className="drawer-policy-content">
+                <label htmlFor="policy-versioned" className="drawer-policy-title-row" style={{ cursor: 'pointer' }}>
+                  <span className="drawer-policy-title">Enable Versioning (VERSIONED)</span>
+                </label>
+                <div className="drawer-policy-desc">
+                  Preserves document snapshots across writes, allowing time-travel queries via <code>REWIND</code>.
+                </div>
+              </div>
+            </div>
+
+            {/* MAX DOCUMENTS */}
+            <div className="drawer-policy-item">
+              <input
+                type="checkbox"
+                id="policy-max-docs"
+                className="drawer-policy-checkbox"
+                checked={policyMaxDocsEnabled}
+                onChange={(e) => setPolicyMaxDocsEnabled(e.target.checked)}
+              />
+              <div className="drawer-policy-content">
+                <label htmlFor="policy-max-docs" className="drawer-policy-title-row" style={{ cursor: 'pointer' }}>
+                  <span className="drawer-policy-title">Document Capacity Limit (MAX DOCUMENTS)</span>
+                </label>
+                <div className="drawer-policy-desc">
+                  Enforces a maximum document ceiling; automatically replaces least recently used documents.
+                </div>
+                {policyMaxDocsEnabled && (
+                  <div className="drawer-policy-extra-input">
+                    <span style={{ fontSize: '12px', color: '#475569' }}>Limit:</span>
+                    <input
+                      type="number"
+                      min="1"
+                      className="drawer-input-inline"
+                      style={{ width: '110px' }}
+                      value={policyMaxDocs}
+                      onChange={(e) => setPolicyMaxDocs(parseInt(e.target.value, 10) || 100)}
+                    />
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>documents</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* TTL */}
+            <div className="drawer-policy-item">
+              <input
+                type="checkbox"
+                id="policy-ttl"
+                className="drawer-policy-checkbox"
+                checked={policyTtlEnabled}
+                onChange={(e) => setPolicyTtlEnabled(e.target.checked)}
+              />
+              <div className="drawer-policy-content">
+                <label htmlFor="policy-ttl" className="drawer-policy-title-row" style={{ cursor: 'pointer' }}>
+                  <span className="drawer-policy-title">Document Expiration (TTL)</span>
+                </label>
+                <div className="drawer-policy-desc">
+                  CleaveDB automatically cleans up documents older than the specified duration.
+                </div>
+                {policyTtlEnabled && (
+                  <div className="drawer-policy-extra-input">
+                    <input
+                      type="number"
+                      min="1"
+                      className="drawer-input-inline"
+                      style={{ width: '90px' }}
+                      value={policyTtlValue}
+                      onChange={(e) => setPolicyTtlValue(parseInt(e.target.value, 10) || 60)}
+                    />
+                    <select
+                      className="drawer-select-inline"
+                      style={{ width: '120px' }}
+                      value={policyTtlUnit}
+                      onChange={(e) => setPolicyTtlUnit(e.target.value as any)}
+                    >
+                      <option value="SECONDS">SECONDS</option>
+                      <option value="MINUTES">MINUTES</option>
+                      <option value="HOURS">HOURS</option>
+                      <option value="DAYS">DAYS</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Information Callout */}
+          <div className="drawer-info-callout">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }}>
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            <div>
+              <strong>CleaveDB Document Model:</strong> In CleaveDB, documents are JSON objects written via <code>POUR INTO</code>. You can generate a random unique ID with <code>RANDOM</code> or specify a custom document identifier. Dynamic macros like <code>_dtz_</code>, <code>_date_</code>, and <code>_time_</code> are evaluated on write.
+            </div>
+          </div>
+
+          {/* Columns / Fields Table Section */}
+          <div className="drawer-columns-section">
+            <div className="drawer-columns-header-bar">
+              <h4 className="drawer-columns-title">Columns / Document Fields</h4>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ padding: '4px 10px', fontSize: '12px' }}
+                onClick={handleAddColumn}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>Add column</span>
+              </button>
+            </div>
+
+            <div className="drawer-columns-table">
+              <div className="drawer-columns-head">
+                <div className="drawer-col-handle"></div>
+                <div className="drawer-col-name">Name</div>
+                <div className="drawer-col-type">Type</div>
+                <div className="drawer-col-default">Default / Value</div>
+                <div className="drawer-col-primary">Primary</div>
+                <div className="drawer-col-action"></div>
+              </div>
+
+              {/* ROW 1: PRIMARY DOCUMENT ID ROW */}
+              <div className="drawer-column-row is-primary">
+                <div className="drawer-col-handle" title="Primary Key Identifier">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2">
+                    <path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5M7 11a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 0v8a3 3 0 0 0 3 3h3" />
+                  </svg>
+                </div>
+                <div className="drawer-col-name">
+                  <input
+                    type="text"
+                    className="drawer-input-inline"
+                    value="id"
+                    disabled
+                    style={{ backgroundColor: '#f1f5f9', color: '#334155', fontWeight: 600 }}
+                  />
+                </div>
+                <div className="drawer-col-type">
+                  <div className="drawer-id-strategy-pill">
+                    <button
+                      type="button"
+                      className={`drawer-id-strategy-btn ${idStrategy === 'RANDOM' ? 'active' : ''}`}
+                      onClick={() => setIdStrategy('RANDOM')}
+                    >
+                      RANDOM
+                    </button>
+                    <button
+                      type="button"
+                      className={`drawer-id-strategy-btn ${idStrategy === 'CUSTOM' ? 'active' : ''}`}
+                      onClick={() => setIdStrategy('CUSTOM')}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                </div>
+                <div className="drawer-col-default">
+                  {idStrategy === 'RANDOM' ? (
+                    <span style={{ fontSize: '12px', color: '#2563eb', fontFamily: 'monospace', fontWeight: 600 }}>
+                      RANDOM (CleaveDB UUID)
+                    </span>
+                  ) : (
+                    <input
+                      type="text"
+                      className="drawer-input-inline mono"
+                      placeholder="e.g. user_101 or order_abc"
+                      value={customIdValue}
+                      onChange={(e) => setCustomIdValue(e.target.value)}
+                    />
+                  )}
+                </div>
+                <div className="drawer-col-primary">
+                  <span className="drawer-primary-badge" title="Primary Key">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                    </svg>
+                  </span>
+                </div>
+                <div className="drawer-col-action"></div>
+              </div>
+
+              {/* DYNAMIC FIELD ROWS */}
+              {columns.map((col) => (
+                <div key={col.id} className="drawer-column-row">
+                  <div className="drawer-col-handle" style={{ color: '#cbd5e1' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="9" cy="6" r="1.5" />
+                      <circle cx="15" cy="6" r="1.5" />
+                      <circle cx="9" cy="12" r="1.5" />
+                      <circle cx="15" cy="12" r="1.5" />
+                      <circle cx="9" cy="18" r="1.5" />
+                      <circle cx="15" cy="18" r="1.5" />
+                    </svg>
+                  </div>
+                  <div className="drawer-col-name">
+                    <input
+                      type="text"
+                      className="drawer-input-inline"
+                      placeholder="column_name"
+                      value={col.name}
+                      onChange={(e) => handleUpdateColumn(col.id, { name: e.target.value })}
+                    />
+                  </div>
+                  <div className="drawer-col-type">
+                    <select
+                      className="drawer-select-inline"
+                      value={col.type}
+                      onChange={(e) => handleUpdateColumn(col.id, { type: e.target.value as any })}
+                    >
+                      <option value="string">string</option>
+                      <option value="integer">integer</option>
+                      <option value="float">float</option>
+                      <option value="boolean">boolean</option>
+                      <option value="date">date</option>
+                      <option value="array">array</option>
+                      <option value="object">object</option>
+                    </select>
+                  </div>
+                  <div className="drawer-col-default" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input
+                      type="text"
+                      className="drawer-input-inline"
+                      placeholder={col.type === 'date' ? '_dtz_, _date_, or _time_' : 'Default value'}
+                      value={col.defaultValue}
+                      onChange={(e) => handleUpdateColumn(col.id, { defaultValue: e.target.value })}
+                    />
+                    {col.type === 'date' && (
+                      <button
+                        type="button"
+                        title="Use CleaveDB _dtz_ macro"
+                        style={{
+                          fontSize: '10px',
+                          padding: '2px 5px',
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: '4px',
+                          color: '#2563eb',
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                          flexShrink: 0
+                        }}
+                        onClick={() => handleUpdateColumn(col.id, { defaultValue: '_dtz_' })}
+                      >
+                        _dtz_
+                      </button>
+                    )}
+                  </div>
+                  <div className="drawer-col-primary">
+                    <input type="checkbox" disabled style={{ accentColor: '#cbd5e1', cursor: 'not-allowed' }} />
+                  </div>
+                  <div className="drawer-col-action">
+                    <button
+                      type="button"
+                      className="drawer-del-btn"
+                      onClick={() => handleRemoveColumn(col.id)}
+                      title="Remove column"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button type="button" className="drawer-add-col-btn" onClick={handleAddColumn}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span>Add column</span>
+            </button>
+          </div>
+
+          {/* Live CleaveQL Query Preview */}
+          <div className="drawer-field-group">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label className="drawer-field-label" style={{ margin: 0 }}>
+                <span>Generated CleaveQL Preview</span>
+              </label>
+              <button
+                type="button"
+                style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}
+                onClick={() => setShowCqlPreview(!showCqlPreview)}
+              >
+                {showCqlPreview ? 'Hide Preview' : 'Show Preview'}
+              </button>
+            </div>
+            {showCqlPreview && (
+              <div className="drawer-cql-preview-box">
+                <pre className="drawer-cql-code">
+                  {(() => {
+                    const { shapeQuery, pourQuery } = generateCleaveQLStatements()
+                    return `${shapeQuery ? shapeQuery + ';\n' : ''}${pourQuery};`
+                  })()}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Drawer Footer */}
+        <div className="supabase-drawer-footer">
+          <button
+            className="btn-secondary"
+            onClick={() => setIsNewDrawerOpen(false)}
+            disabled={isDrawerSubmitting}
+            type="button"
+          >
+            Cancel
+          </button>
+          <div className="supabase-drawer-footer-right">
+            <button
+              className="btn-primary"
+              onClick={handleSaveAndPour}
+              disabled={isDrawerSubmitting}
+              type="button"
+              style={{ minWidth: '130px' }}
+            >
+              {isDrawerSubmitting ? (
+                <>
+                  <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
+                  </svg>
+                  <span>Pouring...</span>
+                </>
+              ) : (
+                <span>Save &amp; Pour</span>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

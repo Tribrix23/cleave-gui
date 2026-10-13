@@ -65,122 +65,23 @@ interface DatabaseItem {
   engine: string
   status: 'Online' | 'Syncing' | 'Optimizing'
   size: string
+  records?: number
   collections: number
   latency: string
   lastActive: string
 }
 
-const INITIAL_DATABASES: DatabaseItem[] = [
-  {
-    id: 'db-1',
-    name: 'analytics_events_prod',
-    engine: 'Columnar LSM',
-    status: 'Online',
-    size: '8.2 GB',
-    collections: 8,
-    latency: '0.62 ms',
-    lastActive: 'Just now'
-  },
-  {
-    id: 'db-2',
-    name: 'user_vault_store',
-    engine: 'Document Vector',
-    status: 'Online',
-    size: '4.1 GB',
-    collections: 4,
-    latency: '0.84 ms',
-    lastActive: '12s ago'
-  },
-  {
-    id: 'db-3',
-    name: 'realtime_session_cache',
-    engine: 'In-Memory KeyValue',
-    status: 'Online',
-    size: '1.2 GB',
-    collections: 2,
-    latency: '0.21 ms',
-    lastActive: '1s ago'
-  },
-  {
-    id: 'db-4',
-    name: 'audit_journal_immutable',
-    engine: 'Append-Only Log',
-    status: 'Syncing',
-    size: '4.9 GB',
-    collections: 2,
-    latency: '1.05 ms',
-    lastActive: '3m ago'
-  },
-  {
-    id: 'db-5',
-    name: 'orders_fulfillment_db',
-    engine: 'Document Vector',
-    status: 'Online',
-    size: '14.6 GB',
-    collections: 12,
-    latency: '0.73 ms',
-    lastActive: '4s ago'
-  },
-  {
-    id: 'db-6',
-    name: 'timeseries_metrics_local',
-    engine: 'Columnar LSM',
-    status: 'Online',
-    size: '21.8 GB',
-    collections: 6,
-    latency: '0.38 ms',
-    lastActive: '2s ago'
-  },
-  {
-    id: 'db-7',
-    name: 'auth_tokens_kv',
-    engine: 'In-Memory KeyValue',
-    status: 'Online',
-    size: '750 MB',
-    collections: 3,
-    latency: '0.15 ms',
-    lastActive: 'Just now'
-  },
-  {
-    id: 'db-8',
-    name: 'vector_search_embeddings',
-    engine: 'Vector HNSW',
-    status: 'Online',
-    size: '16.4 GB',
-    collections: 5,
-    latency: '1.14 ms',
-    lastActive: '18s ago'
-  },
-  {
-    id: 'db-9',
-    name: 'config_metadata_store',
-    engine: 'Append-Only Log',
-    status: 'Online',
-    size: '2.3 GB',
-    collections: 4,
-    latency: '0.42 ms',
-    lastActive: '42s ago'
-  }
-]
-
-// Generate realistic initial chart data
-function generateInitialPoints(): RequestDataPoint[] {
+function createInitialChartPoints(): RequestDataPoint[] {
   const points: RequestDataPoint[] = []
   const now = Date.now()
-  const baseReq = 3400
-
   for (let i = 24; i >= 0; i--) {
-    const timestamp = new Date(now - i * 1500)
+    const timestamp = new Date(now - i * 1000)
     const timeStr = timestamp.toTimeString().split(' ')[0]
-    // Organic wave pattern with random variance
-    const variance = Math.sin(i * 0.45) * 850 + (Math.random() * 400 - 200)
-    const req = Math.round(baseReq + variance)
-    const lat = parseFloat((0.65 + Math.random() * 0.35).toFixed(2))
     points.push({
       id: 25 - i,
       time: timeStr,
-      requests: req,
-      latency: lat
+      requests: 0,
+      latency: 0
     })
   }
   return points
@@ -190,7 +91,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
   const [activeTab, setActiveTab] = useState<'overview' | 'databases' | 'cleaveql' | 'settings'>('overview')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true)
   const [telemetry, setTelemetry] = useState<CleaveTelemetry | null>(null)
-  const [databases, setDatabases] = useState<DatabaseItem[]>(INITIAL_DATABASES)
+  const [databases, setDatabases] = useState<DatabaseItem[]>([])
   const [searchFilter, setSearchFilter] = useState('')
 
   // Live real computer storage
@@ -203,17 +104,13 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
   })
 
   // Real-time Line Chart Points
-  const [chartPoints, setChartPoints] = useState<RequestDataPoint[]>(generateInitialPoints)
+  const [chartPoints, setChartPoints] = useState<RequestDataPoint[]>(createInitialChartPoints)
   const [hoveredPoint, setHoveredPoint] = useState<RequestDataPoint | null>(null)
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null)
   const chartContainerRef = useRef<HTMLDivElement>(null)
 
   // Live Requests & Storage Tracking State
-  const [sessionQueryHits, setSessionQueryHits] = useState(0)
   const [dbStorageFormatted, setDbStorageFormatted] = useState('0 B')
-  const [liveBurstRps, setLiveBurstRps] = useState(0)
-  const requestTimestampsRef = useRef<number[]>([])
-  const lastServerTotalReqsRef = useRef<number>(0)
 
   // CleaveQL State
   const [cqlQuery, setCqlQuery] = useState(`POUR INTO users "jane" {
@@ -256,11 +153,6 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
   // Real CleaveQL Execution via window.api.query
   const handleRunCql = async (): Promise<void> => {
     const t0 = performance.now()
-    // Immediately register active user request hit & live burst
-    const nowMs = Date.now()
-    requestTimestampsRef.current.push(nowMs)
-    setSessionQueryHits((prev) => prev + 1)
-
     try {
       if (window.api?.query) {
         const res = await window.api.query(cqlQuery)
@@ -298,36 +190,6 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
     }
   }
 
-  // Smooth rolling request rate calculation so burst query spamming is preserved and visible
-  useEffect(() => {
-    const rpsTimer = setInterval(() => {
-      const now = Date.now()
-      // Keep timestamps in a sliding 4-second window
-      requestTimestampsRef.current = requestTimestampsRef.current.filter((t) => t > now - 4000)
-      const count = requestTimestampsRef.current.length
-      if (count > 0) {
-        // High-responsiveness burst rate
-        const rps = Math.max(1, Math.round(count / 1.5))
-        setLiveBurstRps(rps)
-        setChartPoints((prev) => {
-          const last = prev[prev.length - 1]
-          const nowStr = new Date().toTimeString().split(' ')[0]
-          const newPt: RequestDataPoint = {
-            id: (last?.id ?? 0) + 1,
-            time: nowStr,
-            requests: rps,
-            latency: parseFloat((0.45 + Math.random() * 0.4).toFixed(2))
-          }
-          return [...prev.slice(1), newPt]
-        })
-      } else {
-        setLiveBurstRps(0)
-      }
-    }, 750)
-
-    return () => clearInterval(rpsTimer)
-  }, [])
-
   const handleCopyId = (text: string): void => {
     navigator.clipboard?.writeText(text)
     setCqlCopied(true)
@@ -362,7 +224,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
     setCqlQuery(examples[nextIdx >= 0 ? nextIdx : 0])
   }
 
-  // Fetch real CleaveDB telemetry metrics continuously
+  // Fetch real CleaveDB telemetry metrics continuously (pure REST, 0 query pollution)
   useEffect(() => {
     let isMounted = true
     async function fetchTelemetry(): Promise<void> {
@@ -373,22 +235,11 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
             if (res.metrics) {
               setTelemetry(res.metrics)
 
-              // Detect server-side total request increase from external queries/CLI
-              const serverTotal = res.metrics.total_requests || 0
-              if (lastServerTotalReqsRef.current > 0 && serverTotal > lastServerTotalReqsRef.current) {
-                const delta = serverTotal - lastServerTotalReqsRef.current
-                const now = Date.now()
-                for (let i = 0; i < delta; i++) {
-                  requestTimestampsRef.current.push(now)
-                }
-              }
-              lastServerTotalReqsRef.current = serverTotal
-
-              if (res.metrics.chart_history && res.metrics.chart_history.length > 0 && requestTimestampsRef.current.length === 0) {
-                const livePts: RequestDataPoint[] = res.metrics.chart_history.map(([ts, rps, lat], idx) => ({
+              if (res.metrics.chart_history && res.metrics.chart_history.length > 0) {
+                const livePts: RequestDataPoint[] = res.metrics.chart_history.slice(-25).map(([ts, rps, lat], idx) => ({
                   id: idx,
                   time: new Date(ts * 1000).toTimeString().split(' ')[0],
-                  requests: rps,
+                  requests: rps || 0,
                   latency: parseFloat((lat || 0).toFixed(2))
                 }))
                 setChartPoints(livePts)
@@ -399,47 +250,9 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
               setDbStorageFormatted(res.dbStorageFormatted)
             }
 
-            // Scoped Databases: prioritize server-provided scoped databases
-            if (res.scopedDatabases && res.scopedDatabases.length > 0) {
+            // Real scoped database buckets directly from server
+            if (res.scopedDatabases !== undefined) {
               setDatabases(res.scopedDatabases)
-            } else if (res.metrics?.databases && res.metrics.databases.length > 0) {
-              // Fallback client-side scoping
-              const user = username || 'david'
-              const seen = new Set<string>()
-              const scoped: DatabaseItem[] = []
-              let totalBytesFallback = 0
-
-              for (const d of res.metrics.databases) {
-                if (d.name?.startsWith('_') || d.full_name?.startsWith('_')) {
-                  if (!isSuperUser) continue
-                }
-                if (d.tenant && d.tenant !== 'default' && d.tenant !== user) {
-                  continue
-                }
-                const cleanName = d.full_name?.startsWith(`${user}.`) ? d.full_name.slice(user.length + 1) : d.name
-                if (seen.has(cleanName)) continue
-                seen.add(cleanName)
-                const sz = d.size_bytes || 0
-                totalBytesFallback += sz
-                scoped.push({
-                  id: `db-${cleanName}`,
-                  name: cleanName,
-                  engine: d.storage_engine || (cleanName.startsWith('_') ? 'System Internal' : 'Document Vector'),
-                  status: (d.status as any) || 'Online',
-                  size: d.size || '0 B',
-                  collections: Object.keys(d.schema || {}).length || (d.records ? 1 : 0),
-                  latency: res.metrics.latency_ms ? `${res.metrics.latency_ms.toFixed(2)} ms` : '0.42 ms',
-                  lastActive: 'Active'
-                })
-              }
-              if (scoped.length > 0) {
-                setDatabases(scoped)
-                if (!res.dbStorageFormatted) {
-                  if (totalBytesFallback < 1024) setDbStorageFormatted(`${totalBytesFallback} B`)
-                  else if (totalBytesFallback < 1024 * 1024) setDbStorageFormatted(`${(totalBytesFallback / 1024).toFixed(1)} KB`)
-                  else setDbStorageFormatted(`${(totalBytesFallback / (1024 * 1024)).toFixed(1)} MB`)
-                }
-              }
             }
           }
         }
@@ -449,7 +262,7 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
     }
 
     fetchTelemetry()
-    const timer = setInterval(fetchTelemetry, 1500)
+    const timer = setInterval(fetchTelemetry, 1000)
     return () => {
       isMounted = false
       clearInterval(timer)
@@ -473,41 +286,14 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
     return () => clearInterval(storageTimer)
   }, [])
 
-  // Real-time live chart updates (fallback if no server chart points)
-  useEffect(() => {
-    if (telemetry?.chart_history && telemetry.chart_history.length > 0) return
-    const timer = setInterval(() => {
-      setChartPoints((prev) => {
-        const last = prev[prev.length - 1]
-        const now = new Date()
-        const timeStr = now.toTimeString().split(' ')[0]
-        const randomDelta = (Math.random() - 0.48) * 600
-        const newReq = Math.max(1800, Math.min(6200, Math.round(last.requests + randomDelta)))
-        const newLat = parseFloat((0.65 + Math.random() * 0.35).toFixed(2))
-
-        const newPoint: RequestDataPoint = {
-          id: last.id + 1,
-          time: timeStr,
-          requests: newReq,
-          latency: newLat
-        }
-
-        // Keep 25 points moving horizontally
-        return [...prev.slice(1), newPoint]
-      })
-    }, 1500)
-
-    return () => clearInterval(timer)
-  }, [telemetry?.chart_history])
-
-  const currentRequests = Math.max(liveBurstRps, telemetry ? telemetry.requests_per_second : 0)
+  const currentRequests = telemetry ? (telemetry.requests_per_second || 0) : 0
   const peakRequests = Math.max(...chartPoints.map((p) => p.requests), currentRequests)
   const avgRequests = chartPoints.length > 0
     ? Math.round(chartPoints.reduce((acc, p) => acc + p.requests, 0) / chartPoints.length)
     : 0
 
-  const totalHits = (telemetry?.total_requests ?? 0) + sessionQueryHits
-  const totalRecords = databases.reduce((acc, d) => acc + (d.collections || 0), 0)
+  const totalHits = telemetry?.total_requests ?? 0
+  const totalRecords = databases.reduce((acc, d) => acc + (d.records || 0), 0)
 
   const effectiveStorage = telemetry?.storage
     ? {
@@ -1172,35 +958,53 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredDatabases.map((db) => (
-                      <tr key={db.id}>
-                        <td>
-                          <div className="db-name-cell">
-                            <span className="db-disk-icon">
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <ellipse cx="12" cy="5" rx="9" ry="3" />
-                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-                              </svg>
+                    {filteredDatabases.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: '#64748b' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <ellipse cx="12" cy="5" rx="9" ry="3" />
+                              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                            </svg>
+                            <span style={{ fontWeight: 600, color: '#334155', fontSize: '14px' }}>No Database Buckets Found</span>
+                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                              User <strong>{username || 'david'}</strong> has not created any buckets yet.
                             </span>
-                            <span className="db-name-text">{db.name}</span>
                           </div>
                         </td>
-                        <td>
-                          <span className="engine-badge">{db.engine}</span>
-                        </td>
-                        <td>
-                          <span className={`status-badge ${db.status.toLowerCase()}`}>
-                            <span className={`dot-${db.status.toLowerCase()}`} />
-                            {db.status}
-                          </span>
-                        </td>
-                        <td className="cell-muted font-mono">{db.size}</td>
-                        <td className="cell-muted">{db.collections}</td>
-                        <td className="cell-muted font-mono">{db.latency}</td>
-                        <td className="cell-muted">{db.lastActive}</td>
                       </tr>
-                    ))}
+                    ) : (
+                      filteredDatabases.map((db) => (
+                        <tr key={db.id}>
+                          <td>
+                            <div className="db-name-cell">
+                              <span className="db-disk-icon">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <ellipse cx="12" cy="5" rx="9" ry="3" />
+                                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                                </svg>
+                              </span>
+                              <span className="db-name-text">{db.name}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="engine-badge">{db.engine}</span>
+                          </td>
+                          <td>
+                            <span className={`status-badge ${db.status.toLowerCase()}`}>
+                              <span className={`dot-${db.status.toLowerCase()}`} />
+                              {db.status}
+                            </span>
+                          </td>
+                          <td className="cell-muted font-mono">{db.size}</td>
+                          <td className="cell-muted">{db.collections}</td>
+                          <td className="cell-muted font-mono">{db.latency}</td>
+                          <td className="cell-muted">{db.lastActive}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

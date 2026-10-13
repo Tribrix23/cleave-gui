@@ -222,6 +222,10 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
   const [docModalTab, setDocModalTab] = useState<'fields' | 'json'>('fields')
   const [docCopied, setDocCopied] = useState(false)
 
+  // Document Drain / Delete State
+  const [docToDrain, setDocToDrain] = useState<BucketDocument | null>(null)
+  const [isDraining, setIsDraining] = useState(false)
+
   // Supabase-Style Right Slide-Out Drawer State
   const [isNewDrawerOpen, setIsNewDrawerOpen] = useState(false)
   const [newBucketName, setNewBucketName] = useState('')
@@ -248,11 +252,13 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
   const [isDrawerSubmitting, setIsDrawerSubmitting] = useState(false)
   const [showCqlPreview, setShowCqlPreview] = useState(true)
 
-  // ESC key handler for Document Modal and Right Slide-out Drawer
+  // ESC key handler for Document Modal, Drain Dialog, and Right Slide-out Drawer
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
-        if (selectedDoc) {
+        if (docToDrain) {
+          setDocToDrain(null)
+        } else if (selectedDoc) {
           setSelectedDoc(null)
         } else if (isNewDrawerOpen) {
           setIsNewDrawerOpen(false)
@@ -261,7 +267,41 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedDoc, isNewDrawerOpen])
+  }, [docToDrain, selectedDoc, isNewDrawerOpen])
+
+  // Drain Document to _rubbish via CleaveQL DRAIN <bucket> "<docId>"
+  const handleDrainDocument = async (docId: string): Promise<void> => {
+    if (!selectedBucket) return
+    setIsDraining(true)
+    try {
+      if (window.api?.query) {
+        const query = `DRAIN ${selectedBucket.name} "${docId}"`
+        const res = await window.api.query(query)
+        if (res && (res.success || (res as any).status === 'ok' || !res.error)) {
+          // Remove from local documents state immediately for snappy UI
+          setBucketDocuments((prev) => prev.filter((d) => d.id !== docId))
+          // If the document modal was open for this doc, close it
+          if (selectedDoc?.id === docId) {
+            setSelectedDoc(null)
+          }
+          // Refresh databases telemetry so record counts & _rubbish counts update
+          if (window.api?.getTelemetry) {
+            const tele = await window.api.getTelemetry()
+            if (tele?.scopedDatabases) {
+              setDatabases(tele.scopedDatabases)
+            }
+          }
+          setDocToDrain(null)
+        } else {
+          console.error('Drain error:', res?.error)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to drain document:', err)
+    } finally {
+      setIsDraining(false)
+    }
+  }
 
   const handleAddColumn = (): void => {
     const newId = 'col_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)
@@ -1726,6 +1766,27 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                           onClick={() => setSelectedDoc(doc)}
                           title={`Click to inspect document "${doc.id}"`}
                         >
+                          {/* Corner Red Delete Trash Action & Blur Effect (Image 4) */}
+                          <div className="doc-corner-delete-wrapper">
+                            <div className="doc-corner-blur-backdrop" />
+                            <button
+                              type="button"
+                              className="doc-corner-trash-btn"
+                              title={`Drain "${doc.id}" to _rubbish`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDocToDrain(doc)
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
+                              </svg>
+                            </button>
+                          </div>
+
                           <div className="doc-file-header">
                             <DocFileIcon />
                             <span className="doc-file-keys-badge">{keys.length} fields</span>
@@ -2321,37 +2382,33 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
             {/* Modal Body */}
             <div className="doc-modal-body">
               {docModalTab === 'fields' ? (
-                <div className="doc-fields-table-wrapper">
-                  <table className="doc-fields-table">
-                    <thead>
-                      <tr>
-                        <th>Key</th>
-                        <th>Type</th>
-                        <th>Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(selectedDoc.body || {}).map(([key, val]) => (
-                        <tr key={key}>
-                          <td className="doc-field-key font-mono">{key}</td>
-                          <td className="doc-field-type">
-                            <span className={`type-tag type-${typeof val}`}>
-                              {Array.isArray(val) ? 'array' : typeof val}
-                            </span>
-                          </td>
-                          <td className="doc-field-value">
-                            {typeof val === 'object' && val !== null ? (
-                              <pre className="inline-json">{JSON.stringify(val, null, 2)}</pre>
-                            ) : typeof val === 'boolean' ? (
-                              <span className={`bool-badge ${val ? 'bool-true' : 'bool-false'}`}>{String(val)}</span>
-                            ) : (
-                              <span className="scalar-value">{String(val)}</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="doc-modern-card-list">
+                  {Object.entries(selectedDoc.body || {}).map(([key, val]) => {
+                    const inferredType = Array.isArray(val)
+                      ? 'array'
+                      : typeof val === 'object' && val === null
+                        ? 'null'
+                        : typeof val === 'number'
+                          ? 'number'
+                          : typeof val
+                    return (
+                      <div key={key} className="doc-modern-row">
+                        <div className="doc-modern-row-left">
+                          <span className="doc-modern-prop-name font-mono">{key}</span>
+                          <span className="doc-modern-prop-type">{inferredType}</span>
+                        </div>
+                        <div className="doc-modern-row-right">
+                          {typeof val === 'object' && val !== null ? (
+                            <pre className="inline-json">{JSON.stringify(val, null, 2)}</pre>
+                          ) : typeof val === 'boolean' ? (
+                            <span className="doc-modern-val">{String(val)}</span>
+                          ) : (
+                            <span className="doc-modern-val">{String(val)}</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="doc-json-viewer">
@@ -2370,6 +2427,20 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                 <span>Approx. {selectedDoc.size || '32 B'}</span>
               </div>
               <div className="doc-footer-buttons">
+                <button
+                  className="btn-danger-outline"
+                  onClick={() => setDocToDrain(selectedDoc)}
+                  type="button"
+                  title="Drain document to _rubbish"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                  <span>Drain to _rubbish</span>
+                </button>
                 <button className="btn-secondary" onClick={() => setSelectedDoc(null)} type="button">
                   Close
                 </button>
@@ -2385,6 +2456,84 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                   Inspect in CleaveQL
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMATION DIALOG FOR DRAINING DOCUMENT TO _rubbish */}
+      {docToDrain && (
+        <div className="doc-modal-overlay" onClick={() => !isDraining && setDocToDrain(null)}>
+          <div className="drain-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="drain-dialog-header">
+              <div className="drain-dialog-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </div>
+              <div className="drain-dialog-title-area">
+                <h3 className="drain-dialog-title">Drain document to _rubbish?</h3>
+                <p className="drain-dialog-subtitle">
+                  Document <strong>&quot;{docToDrain.id}&quot;</strong> will be moved from <strong>{selectedBucket?.name}</strong> to the <code>_rubbish</code> bin.
+                </p>
+              </div>
+            </div>
+
+            <div className="drain-dialog-body">
+              <div className="drain-dialog-info-card">
+                <div className="drain-info-row">
+                  <span className="drain-info-label">Target Bucket:</span>
+                  <span className="drain-info-val font-mono">{selectedBucket?.name}</span>
+                </div>
+                <div className="drain-info-row">
+                  <span className="drain-info-label">Document ID:</span>
+                  <span className="drain-info-val font-mono">{docToDrain.id}</span>
+                </div>
+                <div className="drain-info-row">
+                  <span className="drain-info-label">CleaveQL Query:</span>
+                  <code className="drain-info-code">DRAIN {selectedBucket?.name} &quot;{docToDrain.id}&quot;</code>
+                </div>
+              </div>
+              <p className="drain-dialog-explanation">
+                In CleaveDB, drained documents are safely moved to the <code>_rubbish</code> bin where they can be restored via <code>SALVAGE</code> or permanently deleted via <code>INCINERATE</code>.
+              </p>
+            </div>
+
+            <div className="drain-dialog-footer">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setDocToDrain(null)}
+                disabled={isDraining}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-danger"
+                onClick={() => handleDrainDocument(docToDrain.id)}
+                disabled={isDraining}
+              >
+                {isDraining ? (
+                  <>
+                    <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
+                    </svg>
+                    <span>Draining...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                    <span>Confirm Drain</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

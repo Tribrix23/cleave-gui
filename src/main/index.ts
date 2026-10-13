@@ -495,18 +495,23 @@ app.whenReady().then(() => {
 
       // If user is superuser and no system bucket in databases, include known system buckets
       if (isSuper) {
-        const sysNames = ['_auth', '_bonds', '_embeddings', '_rubbish']
-        for (const sysName of sysNames) {
+        const sysDetails: Record<string, { size: string; bytes: number; records: number }> = {
+          _auth: { size: '1.2 KB', bytes: 1200, records: 6 },
+          _bonds: { size: '0 B', bytes: 0, records: 0 },
+          _embeddings: { size: '4.8 KB', bytes: 4800, records: 7 },
+          _rubbish: { size: '1.8 KB', bytes: 1800, records: 3 }
+        }
+        for (const [sysName, meta] of Object.entries(sysDetails)) {
           if (!scopedDatabases.some((db) => db.name === sysName)) {
             scopedDatabases.push({
               id: `bucket-${sysName}`,
               name: sysName,
               engine: 'System Internal',
               status: 'Online',
-              size: '1.2 KB',
-              size_bytes: 1200,
-              records: 1,
-              collections: 1,
+              size: meta.size,
+              size_bytes: meta.bytes,
+              records: meta.records,
+              collections: meta.records > 0 ? 1 : 0,
               schema: {},
               is_system: true,
               latency: '0.42 ms',

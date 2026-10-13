@@ -69,6 +69,117 @@ interface DatabaseItem {
   collections: number
   latency: string
   lastActive: string
+  is_system?: boolean
+}
+
+interface BucketDocument {
+  gid: string
+  id: string
+  body: any
+  size?: string
+}
+
+function formatDocSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function BucketFolderIcon({ hasContent }: { hasContent: boolean }): React.JSX.Element {
+  return (
+    <div className={`bucket-folder-icon-wrapper ${hasContent ? 'has-content' : 'is-empty'}`}>
+      <svg className="folder-svg" viewBox="0 0 88 74" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="folderBackGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#1d4ed8" />
+            <stop offset="100%" stopColor="#1e40af" />
+          </linearGradient>
+          <linearGradient id="folderFrontGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#3b82f6" />
+            <stop offset="100%" stopColor="#2563eb" />
+          </linearGradient>
+          <filter id="paperShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.18" />
+          </filter>
+          <filter id="flapShadow" x="-10%" y="-10%" width="120%" height="130%">
+            <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.22" />
+          </filter>
+        </defs>
+
+        {/* 1. Back Folder Body & Tab (Darker Blue) */}
+        <path
+          className="folder-back-body"
+          d="M 8 16 C 8 11.58 11.58 8 16 8 L 34 8 C 37.5 8 40.5 10 42.5 13.5 L 45.5 18 L 74 18 C 78.42 18 82 21.58 82 26 L 82 62 C 82 66.42 78.42 70 74 70 L 16 70 C 11.58 70 8 66.42 8 62 Z"
+          fill="url(#folderBackGrad)"
+        />
+
+        {/* Inner pocket cavity */}
+        <rect x="12" y="22" width="66" height="42" rx="4" fill="#172554" opacity="0.45" />
+
+        {/* 2. Paper Document sticking out (ONLY when hasContent is true) */}
+        {hasContent && (
+          <g className="folder-paper" filter="url(#paperShadow)">
+            <path
+              d="M 22 10 L 56 10 L 66 20 L 66 50 L 22 50 Z"
+              fill="#ffffff"
+              stroke="#cbd5e1"
+              strokeWidth="1"
+            />
+            <path
+              d="M 56 10 L 56 20 L 66 20 Z"
+              fill="#e2e8f0"
+              stroke="#cbd5e1"
+              strokeWidth="0.8"
+            />
+            <line x1="28" y1="20" x2="50" y2="20" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="28" y1="27" x2="60" y2="27" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
+            <line x1="28" y1="33" x2="58" y2="33" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" />
+            <line x1="28" y1="39" x2="48" y2="39" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" />
+          </g>
+        )}
+
+        {/* 3. Front Flap (Opens in 3D perspective on hover) */}
+        <g className="folder-front-flap-group">
+          <path
+            className="folder-front-flap"
+            d="M 6 28 C 6 23.58 9.58 20 14 20 L 76 20 C 80.42 20 84 23.58 84 28 L 81 63 C 81 67.42 77.42 71 73 71 L 17 71 C 12.58 71 9 67.42 9 63 Z"
+            fill="url(#folderFrontGrad)"
+            filter="url(#flapShadow)"
+          />
+          <path
+            className="folder-flap-rim"
+            d="M 14 21 L 76 21"
+            stroke="#93c5fd"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            opacity="0.8"
+          />
+        </g>
+      </svg>
+    </div>
+  )
+}
+
+function DocFileIcon(): React.JSX.Element {
+  return (
+    <div className="doc-file-icon">
+      <svg width="38" height="46" viewBox="0 0 38 46" fill="none">
+        <path
+          d="M 3 3 C 3 1.34 4.34 0 6 0 L 25 0 L 35 10 L 35 43 C 35 44.66 33.66 46 32 46 L 6 46 C 4.34 46 3 44.66 3 43 Z"
+          fill="#ffffff"
+          stroke="#cbd5e1"
+          strokeWidth="1.5"
+        />
+        <path d="M 25 0 L 25 10 L 35 10 Z" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.2" />
+        <rect x="8" y="15" width="14" height="2.5" rx="1.2" fill="#3b82f6" />
+        <rect x="8" y="21" width="22" height="2" rx="1" fill="#94a3b8" />
+        <rect x="8" y="26" width="18" height="2" rx="1" fill="#cbd5e1" />
+        <rect x="8" y="31" width="20" height="2" rx="1" fill="#cbd5e1" />
+      </svg>
+      <span className="doc-badge-pill">JSON</span>
+    </div>
+  )
 }
 
 function createInitialChartPoints(): RequestDataPoint[] {
@@ -93,6 +204,82 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
   const [telemetry, setTelemetry] = useState<CleaveTelemetry | null>(null)
   const [databases, setDatabases] = useState<DatabaseItem[]>([])
   const [searchFilter, setSearchFilter] = useState('')
+
+  // Bucket Explorer & Document Drill-Down State
+  const [selectedBucket, setSelectedBucket] = useState<DatabaseItem | null>(null)
+  const [bucketDocuments, setBucketDocuments] = useState<BucketDocument[]>([])
+  const [isLoadingDocs, setIsLoadingDocs] = useState(false)
+  const [bucketSearchFilter, setBucketSearchFilter] = useState('')
+  const [docSearchFilter, setDocSearchFilter] = useState('')
+  const [selectedDoc, setSelectedDoc] = useState<BucketDocument | null>(null)
+  const [docModalTab, setDocModalTab] = useState<'fields' | 'json'>('fields')
+  const [docCopied, setDocCopied] = useState(false)
+
+  // ESC key handler for Document Modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setSelectedDoc(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // Copy JSON inside modal
+  const handleCopyDocJson = async (): Promise<void> => {
+    if (!selectedDoc) return
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(selectedDoc.body, null, 2))
+      setDocCopied(true)
+      setTimeout(() => setDocCopied(false), 1800)
+    } catch (err) {
+      console.error('Failed to copy JSON:', err)
+    }
+  }
+
+  // Load documents inside a bucket via SCOOP <bucket>
+  const loadBucketDocuments = async (bucketName: string): Promise<void> => {
+    setIsLoadingDocs(true)
+    try {
+      if (window.api?.query) {
+        const res = await window.api.query(`SCOOP ${bucketName}`)
+        if (res && res.success && res.results) {
+          const parsedDocs: BucketDocument[] = []
+          const rawList = Array.isArray(res.results) ? res.results : [res.results]
+          for (const item of rawList) {
+            const docs = item.documents || (Array.isArray(item) ? item : [])
+            for (const d of docs) {
+              const gid = d.gid || `${bucketName}:${d.id || 'doc'}`
+              const idPart = gid.includes(':') ? gid.substring(gid.indexOf(':') + 1) : (d.id || d.body?.id || 'record')
+              const body = d.body !== undefined ? d.body : d
+              const sizeStr = formatDocSize(JSON.stringify(body).length)
+              parsedDocs.push({
+                gid,
+                id: idPart,
+                body,
+                size: sizeStr
+              })
+            }
+          }
+          setBucketDocuments(parsedDocs)
+        } else {
+          setBucketDocuments([])
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching bucket documents:', err)
+      setBucketDocuments([])
+    } finally {
+      setIsLoadingDocs(false)
+    }
+  }
+
+  const handleOpenBucket = (b: DatabaseItem): void => {
+    setSelectedBucket(b)
+    setDocSearchFilter('')
+    loadBucketDocuments(b.name)
+  }
 
   // Live real computer storage
   const [systemStorage, setSystemStorage] = useState<SystemStorage>({
@@ -976,7 +1163,15 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                       </tr>
                     ) : (
                       filteredDatabases.map((db) => (
-                        <tr key={db.id}>
+                        <tr
+                          key={db.id}
+                          onClick={() => {
+                            setActiveTab('databases')
+                            handleOpenBucket(db)
+                          }}
+                          style={{ cursor: 'pointer' }}
+                          title={`Click to inspect bucket "${db.name}" in Databases Explorer`}
+                        >
                           <td>
                             <div className="db-name-cell">
                               <span className="db-disk-icon">
@@ -1025,54 +1220,347 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
         </>
       )}
 
-      {/* TAB 2: DATABASES (Clean blank workspace) */}
+      {/* TAB 2: DATABASES (Interactive Animated Bucket Folder Explorer) */}
       {activeTab === 'databases' && (
         <div className="tab-view-container tab-databases-view">
-          <div className="view-header">
-            <div className="view-header-left">
-              <h1 className="view-title">Databases</h1>
-              <p className="view-subtitle">Manage partitions, schemas, and storage engines across your local PC.</p>
-            </div>
-            <div className="view-header-actions">
-              <button className="btn-secondary" onClick={() => setActiveTab('overview')} type="button">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="9" />
-                  <rect x="14" y="3" width="7" height="5" />
-                  <rect x="14" y="12" width="7" height="9" />
-                  <rect x="3" y="16" width="7" height="5" />
-                </svg>
-                <span>Inspect in Overview</span>
-              </button>
-              <button className="btn-primary" type="button">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                <span>New Database</span>
-              </button>
-            </div>
-          </div>
+          {selectedBucket === null ? (
+            /* --- LEVEL 1: ALL STORAGE BUCKETS (FOLDERS) VIEW --- */
+            <>
+              <div className="view-header">
+                <div className="view-header-left">
+                  <h1 className="view-title">Databases & Buckets</h1>
+                  <p className="view-subtitle">Interactive storage explorer. Click any blue folder to browse its files and inspect documents.</p>
+                </div>
+                <div className="view-header-actions">
+                  <button className="btn-secondary" onClick={() => setActiveTab('overview')} type="button">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="9" />
+                      <rect x="14" y="3" width="7" height="5" />
+                      <rect x="14" y="12" width="7" height="9" />
+                      <rect x="3" y="16" width="7" height="5" />
+                    </svg>
+                    <span>Overview Stats</span>
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={() => {
+                      setCqlQuery(`POUR INTO users "new_item_${Date.now().toString().slice(-4)}" {\n  "name": "New Record",\n  "status": "active"\n}`)
+                      setActiveTab('cleaveql')
+                    }}
+                    type="button"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span>New Bucket / Pour</span>
+                  </button>
+                </div>
+              </div>
 
-          <div className="blank-workspace-card">
-            <div className="blank-workspace-icon">
-              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <ellipse cx="12" cy="5" rx="9" ry="3" />
-                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-              </svg>
-            </div>
-            <h3 className="blank-workspace-title">Database Catalog Explorer</h3>
-            <p className="blank-workspace-desc">
-              This workspace is blank for now. Detailed schema inspection, index tuning, and partition explorers are ready to be configured.
-            </p>
-            <div className="blank-workspace-meta">
-              <span className="blank-meta-chip">
-                <span className="status-dot-green" /> {databases.length} Catalogs Loaded
-              </span>
-              <span className="blank-meta-chip">{dbStorageFormatted} Local Storage</span>
-              <span className="blank-meta-chip">Engine: Columnar LSM, KeyValue & Vector</span>
-            </div>
-          </div>
+              {/* Breadcrumbs & Search Toolbar */}
+              <div className="explorer-breadcrumbs-bar">
+                <div className="breadcrumbs-left">
+                  <span className="breadcrumb-current">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>All Storage Buckets</span>
+                  </span>
+                  <span className="breadcrumb-count-badge">
+                    {filteredDatabases.filter((b) => !bucketSearchFilter || b.name.toLowerCase().includes(bucketSearchFilter.toLowerCase())).length} buckets
+                  </span>
+                  <span className="breadcrumb-separator">·</span>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    {dbStorageFormatted} Local Storage
+                  </span>
+                </div>
+                <div className="breadcrumbs-right">
+                  <div className="search-input-wrapper">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input
+                      type="text"
+                      className="explorer-search-input"
+                      placeholder="Filter buckets..."
+                      value={bucketSearchFilter}
+                      onChange={(e) => setBucketSearchFilter(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Buckets Grid */}
+              {(() => {
+                const visibleBuckets = filteredDatabases.filter(
+                  (b) => !bucketSearchFilter || b.name.toLowerCase().includes(bucketSearchFilter.toLowerCase())
+                )
+                if (visibleBuckets.length === 0) {
+                  return (
+                    <div className="empty-bucket-folder-state">
+                      <BucketFolderIcon hasContent={false} />
+                      <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                        {bucketSearchFilter ? `No buckets match "${bucketSearchFilter}"` : 'No Database Buckets Found'}
+                      </h3>
+                      <p style={{ fontSize: '13px', color: '#64748b', maxWidth: '420px', margin: 0 }}>
+                        {bucketSearchFilter
+                          ? 'Try clearing your search query to see all available buckets.'
+                          : `User ${username || 'david'} has not poured any documents yet. Use CleaveQL to create your first bucket.`}
+                      </p>
+                      <button
+                        className="btn-primary"
+                        onClick={() => {
+                          setCqlQuery(`POUR INTO users "jane" {\n  "name": "Jane",\n  "age": 25,\n  "city": "Manila"\n}`)
+                          setActiveTab('cleaveql')
+                        }}
+                        type="button"
+                      >
+                        <span>Pour Sample Data</span>
+                      </button>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="bucket-folders-grid">
+                    {visibleBuckets.map((db) => {
+                      const recordsCount = db.records ?? 0
+                      const hasContent = recordsCount > 0
+                      return (
+                        <div
+                          key={db.id}
+                          className="bucket-folder-card"
+                          onClick={() => handleOpenBucket(db)}
+                          title={`Click to open "${db.name}" folder`}
+                        >
+                          <span className={`folder-card-badge-top ${hasContent ? 'active' : 'empty'}`}>
+                            {hasContent ? `${recordsCount} items` : 'Empty'}
+                          </span>
+
+                          {/* Blue Folder with sticking-out paper if hasContent, and 3D hover animation */}
+                          <BucketFolderIcon hasContent={hasContent} />
+
+                          <h4 className="folder-card-name" title={db.name}>
+                            {db.name}
+                          </h4>
+                          <div className="folder-card-meta">
+                            <span>{db.size}</span>
+                            <span>·</span>
+                            <span>{hasContent ? `${recordsCount} doc${recordsCount === 1 ? '' : 's'}` : '0 docs'}</span>
+                          </div>
+                          <div className="folder-card-footer">
+                            <span className="folder-engine-badge">{db.engine}</span>
+                            {db.is_system && <span className="folder-system-badge">System</span>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </>
+          ) : (
+            /* --- LEVEL 2: INSIDE A SPECIFIC BUCKET (FILES DRILL-DOWN) VIEW --- */
+            <>
+              <div className="view-header">
+                <div className="view-header-left">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => setSelectedBucket(null)}
+                      type="button"
+                      style={{ padding: '6px 12px' }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="19" y1="12" x2="5" y2="12" />
+                        <polyline points="12 19 5 12 12 5" />
+                      </svg>
+                      <span>Back to Buckets</span>
+                    </button>
+                    <h1 className="view-title" style={{ margin: 0 }}>{selectedBucket.name}</h1>
+                  </div>
+                  <p className="view-subtitle" style={{ marginTop: '6px' }}>
+                    Inspecting documents inside bucket <strong>{selectedBucket.name}</strong>. Click any file to view contents.
+                  </p>
+                </div>
+                <div className="view-header-actions">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => loadBucketDocuments(selectedBucket.name)}
+                    type="button"
+                    title="Refresh bucket documents"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="23 4 23 10 17 10" />
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                    </svg>
+                    <span>Refresh</span>
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={() => {
+                      setCqlQuery(`POUR INTO ${selectedBucket.name} "record_${Date.now()}" {\n  "title": "New Record",\n  "status": "active"\n}`)
+                      setActiveTab('cleaveql')
+                    }}
+                    type="button"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span>Pour Document</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Breadcrumb Navigation & Document Search */}
+              <div className="explorer-breadcrumbs-bar">
+                <div className="breadcrumbs-left">
+                  <button className="breadcrumb-btn" onClick={() => setSelectedBucket(null)} type="button">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>Buckets</span>
+                  </button>
+                  <span className="breadcrumb-separator">/</span>
+                  <span className="breadcrumb-current">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>{selectedBucket.name}</span>
+                  </span>
+                  <span className="breadcrumb-count-badge">
+                    {bucketDocuments.length} document{bucketDocuments.length === 1 ? '' : 's'}
+                  </span>
+                  <span className="breadcrumb-separator">·</span>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    {selectedBucket.size} · Engine: {selectedBucket.engine}
+                  </span>
+                </div>
+                <div className="breadcrumbs-right">
+                  <div className="search-input-wrapper">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input
+                      type="text"
+                      className="explorer-search-input"
+                      placeholder="Search files by ID..."
+                      value={docSearchFilter}
+                      onChange={(e) => setDocSearchFilter(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Document Files Grid or Loading/Empty State */}
+              {isLoadingDocs ? (
+                <div className="empty-bucket-folder-state">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#2563eb', fontWeight: 600 }}>
+                    <svg className="animate-spin" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                      <path d="M12 2a10 10 0 0 1 10 10" />
+                    </svg>
+                    <span>Retrieving documents from bucket "{selectedBucket.name}"...</span>
+                  </div>
+                </div>
+              ) : (() => {
+                const filteredDocs = bucketDocuments.filter((d) => {
+                  if (!docSearchFilter) return true
+                  const q = docSearchFilter.toLowerCase()
+                  return (
+                    d.id.toLowerCase().includes(q) ||
+                    d.gid.toLowerCase().includes(q) ||
+                    JSON.stringify(d.body).toLowerCase().includes(q)
+                  )
+                })
+
+                if (filteredDocs.length === 0) {
+                  if (bucketDocuments.length === 0) {
+                    return (
+                      <div className="empty-bucket-folder-state">
+                        <BucketFolderIcon hasContent={false} />
+                        <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: 0 }}>This Folder is Empty</h3>
+                        <p style={{ fontSize: '13px', color: '#64748b', maxWidth: '420px', margin: 0 }}>
+                          Bucket <strong>{selectedBucket.name}</strong> currently has no documents. You can pour documents into this bucket using CleaveQL.
+                        </p>
+                        <button
+                          className="btn-primary"
+                          onClick={() => {
+                            setCqlQuery(`POUR INTO ${selectedBucket.name} "item_1" {\n  "message": "Hello from CleaveDB!"\n}`)
+                            setActiveTab('cleaveql')
+                          }}
+                          type="button"
+                        >
+                          <span>Pour First Document</span>
+                        </button>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div className="empty-bucket-folder-state">
+                      <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#334155', margin: 0 }}>
+                        No files matching "{docSearchFilter}"
+                      </h3>
+                      <button className="btn-secondary" onClick={() => setDocSearchFilter('')} type="button">
+                        Clear Filter
+                      </button>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="bucket-files-grid">
+                    {filteredDocs.map((doc) => {
+                      const keys = Object.keys(doc.body || {})
+                      return (
+                        <div
+                          key={doc.gid}
+                          className="doc-file-card"
+                          onClick={() => setSelectedDoc(doc)}
+                          title={`Click to inspect document "${doc.id}"`}
+                        >
+                          <div className="doc-file-header">
+                            <DocFileIcon />
+                            <span className="doc-file-keys-badge">{keys.length} fields</span>
+                          </div>
+                          <div className="doc-file-info">
+                            {/* The title of each file is the ID of the data! */}
+                            <div className="doc-file-title" title={doc.id}>
+                              {doc.id}
+                            </div>
+                            <div className="doc-file-meta">
+                              <span>{doc.size || '32 B'}</span>
+                              <span>·</span>
+                              <span>GID: {doc.gid}</span>
+                            </div>
+                            {keys.length > 0 && (
+                              <div className="doc-file-preview-chips">
+                                {keys.slice(0, 3).map((k) => (
+                                  <span key={k} className="doc-preview-chip">
+                                    {k}
+                                  </span>
+                                ))}
+                                {keys.length > 3 && (
+                                  <span className="doc-preview-chip" style={{ color: '#94a3b8' }}>
+                                    +{keys.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </>
+          )}
         </div>
       )}
 
@@ -1538,6 +2026,162 @@ export default function DashboardPage({ username, isSuperUser, onSignOut }: Dash
                     Sign Out
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SMOOTH ANIMATED DOCUMENT CONTENT MODAL */}
+      {selectedDoc && (
+        <div className="doc-modal-overlay" onClick={() => setSelectedDoc(null)}>
+          <div className="doc-modal-window" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="doc-modal-header">
+              <div className="doc-modal-title-area">
+                <div className="doc-modal-icon-badge">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="doc-modal-title">
+                    <span className="doc-modal-title-label">Document:</span>
+                    <span className="doc-modal-title-id">{selectedDoc.id}</span>
+                  </div>
+                  <div className="doc-modal-subtitle">
+                    <span className="doc-modal-crumb">
+                      Bucket: <strong>{selectedBucket?.name}</strong>
+                    </span>
+                    <span className="doc-modal-divider">·</span>
+                    <span className="doc-modal-gid">
+                      GID: <code>{selectedDoc.gid}</code>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                className="doc-modal-close-btn"
+                onClick={() => setSelectedDoc(null)}
+                type="button"
+                aria-label="Close modal"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Toolbar with view switch & copy button */}
+            <div className="doc-modal-toolbar">
+              <div className="doc-modal-tabs">
+                <button
+                  className={`doc-tab-btn ${docModalTab === 'fields' ? 'active' : ''}`}
+                  onClick={() => setDocModalTab('fields')}
+                  type="button"
+                >
+                  Fields & Values
+                </button>
+                <button
+                  className={`doc-tab-btn ${docModalTab === 'json' ? 'active' : ''}`}
+                  onClick={() => setDocModalTab('json')}
+                  type="button"
+                >
+                  Raw JSON
+                </button>
+              </div>
+              <div className="doc-modal-actions">
+                <button className="doc-modal-copy-btn" onClick={handleCopyDocJson} type="button">
+                  {docCopied ? (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <span style={{ color: '#16a34a', fontWeight: 600 }}>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                      <span>Copy JSON</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="doc-modal-body">
+              {docModalTab === 'fields' ? (
+                <div className="doc-fields-table-wrapper">
+                  <table className="doc-fields-table">
+                    <thead>
+                      <tr>
+                        <th>Key</th>
+                        <th>Type</th>
+                        <th>Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(selectedDoc.body || {}).map(([key, val]) => (
+                        <tr key={key}>
+                          <td className="doc-field-key font-mono">{key}</td>
+                          <td className="doc-field-type">
+                            <span className={`type-tag type-${typeof val}`}>
+                              {Array.isArray(val) ? 'array' : typeof val}
+                            </span>
+                          </td>
+                          <td className="doc-field-value">
+                            {typeof val === 'object' && val !== null ? (
+                              <pre className="inline-json">{JSON.stringify(val, null, 2)}</pre>
+                            ) : typeof val === 'boolean' ? (
+                              <span className={`bool-badge ${val ? 'bool-true' : 'bool-false'}`}>{String(val)}</span>
+                            ) : (
+                              <span className="scalar-value">{String(val)}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="doc-json-viewer">
+                  <pre className="doc-code-block font-mono">
+                    {JSON.stringify(selectedDoc.body, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="doc-modal-footer">
+              <div className="doc-footer-meta">
+                <span>{Object.keys(selectedDoc.body || {}).length} fields</span>
+                <span>·</span>
+                <span>Approx. {selectedDoc.size || '32 B'}</span>
+              </div>
+              <div className="doc-footer-buttons">
+                <button className="btn-secondary" onClick={() => setSelectedDoc(null)} type="button">
+                  Close
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    setCqlQuery(`FIND ${selectedBucket?.name} "${selectedDoc.id}"`)
+                    setActiveTab('cleaveql')
+                    setSelectedDoc(null)
+                  }}
+                  type="button"
+                >
+                  Inspect in CleaveQL
+                </button>
               </div>
             </div>
           </div>
